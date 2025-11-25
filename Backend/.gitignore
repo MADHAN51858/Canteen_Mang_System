@@ -1,0 +1,51 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+.pnpm-debug.log
+
+# Build outputs
+dist/
+build/
+.nyc_output/
+coverage/
+
+# Environment files
+.env
+
+# Editor directories and files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Temporary
+tmp/
+temp/
+
+# Uploaded images (if any temp storage used locally)
+public/uploads/
+
+# Misc
+*.local
+coverage/
+
+# Cloudinary or other secrets
+*.key
+*.pem
+
+# Ignore generated node binaries
+.node_repl_history
+
