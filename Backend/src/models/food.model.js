@@ -25,7 +25,13 @@ const foodSchema = new Schema(
         inStock: {
             type : Boolean,
             default: true
-        } 
+        },
+        stock: {
+            type: Number,
+            required: true,
+            min: 0,
+            default: 0
+        }
 
     })
 

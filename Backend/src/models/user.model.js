@@ -15,7 +15,17 @@ const userSchema = new Schema(
     role: {
       type: String,
       required: true,
-      enum: ['student','admin']
+      enum: ["student", "staff", "admin"],
+      default: "student",
+      lowercase: true,
+      trim: true,
+    },
+    previousRole: {
+      type: String,
+      enum: ["student", "staff", "admin"],
+      default: "student",
+      lowercase: true,
+      trim: true,
     },
       rollNo: {
       type: String,
@@ -69,12 +79,28 @@ const userSchema = new Schema(
           },
       },
     ],
+    cancelledCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     friends: [
       {
         type: Schema.Types.ObjectId,
         ref: "User",
       },
     ],
+
+    walletBalance: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    blocked: {
+      type: Boolean,
+      default: false,
+    },
 
     password: {
       type: String,
@@ -104,8 +130,7 @@ userSchema.methods.generateAccesToken = function () {
   return jwt.sign(
     {
       _id: this._id,
-      email: this.email,
-      username: this.username,
+      role: this.role,
     },
     process.env.ACCESS_TOKEN_SECRET,
     {

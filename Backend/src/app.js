@@ -8,9 +8,13 @@ dotenv.config();
 const app = express()
 
 app.use(cors({
-    origin: "http://localhost:5173" || "http://localhost:5174" || process.env.CORS_ORIGIN , 
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    credentials: true
+  origin: [
+    process.env.CORS_ORIGIN,
+    "http://localhost:5173",
+    "http://localhost:5174"
+  ].filter(Boolean),
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  credentials: true
 }))
 
 app.use(express.json({limit: "16kb"}))
@@ -18,26 +22,19 @@ app.use(express.urlencoded({extended: true, limit: "16kb"}))
 app.use(express.static("public"))
 app.use(cookieParser())
 
-const razorpay =new Razorpay({
-    key_id: process.env.RZP_KEY_ID,
-    key_secret: process.env.RZP_KEY_SECRET,
-})
+// Dummy payment endpoint for cart
 app.post("/create-order", async (req, res) => {
   const { amount } = req.body;
-
-  const options = {
-    amount: amount * 100,//this will add 2 extra zeros to the amount as razorpay accepts amount in paisa
+  // Return dummy order data
+  const order = {
+    id: "order_" + Math.random().toString(36).substr(2, 9),
+    amount: amount * 100,
     currency: "INR",
     receipt: "receipt#" + Math.random(),
   };
-
-  try {
-    const order = await razorpay.orders.create(options);
-    res.json(order);
-  } catch (err) {
-    res.status(500).json(err);
-  }
+  res.json(order);
 });
+
 //routes import
 import userRouter from "./routes/user.routes.js"
 import foodRouter from "./routes/food.routes.js"

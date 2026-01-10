@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { post, postForm } from "../utils/api";
+import { postForm } from "../utils/api";
 import {
   Box,
   Typography,
@@ -7,9 +7,8 @@ import {
   Button,
   Paper,
   MenuItem,
-  FormControlLabel,
-  Checkbox,
   Stack,
+  Container,
 } from "@mui/material";
 
 export default function Admin() {
@@ -17,7 +16,7 @@ export default function Admin() {
     itemname: "",
     price: "",
     category: "BreakFast",
-    inStock: true,
+    stock: 0,
   });
   const [image, setImage] = useState(null);
   const [msg, setMsg] = useState("");
@@ -49,13 +48,13 @@ export default function Admin() {
       fd.append("itemname", form.itemname);
       fd.append("price", form.price);
       fd.append("category", form.category);
-      fd.append("inStock", form.inStock);
+      fd.append("stock", String(Math.max(0, Number(form.stock || 0))));
       fd.append("image", image);
 
       const res = await postForm("/food/addItem", fd);
       setMsg(res.message || "Added");
       // clear form on success
-      setForm({ itemname: "", price: "", category: "BreakFast", inStock: true });
+      setForm({ itemname: "", price: "", category: "BreakFast", stock: 0 });
       setImage(null);
     } catch (e) {
       console.error(e);
@@ -68,115 +67,128 @@ export default function Admin() {
 
 
   return (
-    <Box
-      sx={{
-        minHeight: "100vh",
-        bgcolor: "#f4f6f8",
-        p: { xs: 2, sm: 3, md: 4 },
-        display: "flex",
-        justifyContent: "center",
-      }}
-    >
-      <Paper
-        elevation={3}
-        sx={{
-          p: 4,
-          width: "100%",
-          maxWidth: 900,
-          borderRadius: 3,
-        }}
-      >
-        <Typography variant="h4" fontWeight={600} textAlign="center" mb={3}>
+    <Container maxWidth="md" sx={{ py: 4 }}>
+      <Paper elevation={3} sx={{ p: 4, borderRadius: 3 }}>
+        <Typography variant="h4" fontWeight={600} mb={3}>
           Admin – Food Management
         </Typography>
-        <Box sx={{ display: 'flex', gap: 3, flexDirection: { xs: 'column', md: 'row' } }}>
+        <Box sx={{ display: "flex", gap: 3, flexDirection: { xs: "column", md: "row" } }}>
           <Stack spacing={2} sx={{ flex: 1 }}>
-          <TextField
-            fullWidth
-            label="Item Name"
-            value={form.itemname}
-            onChange={(e) => setForm({ ...form, itemname: e.target.value })}
-          />
-
-          <TextField
-            fullWidth
-            label="Price"
-            type="number"
-            value={form.price}
-            onChange={(e) =>
-              setForm({ ...form, price: parseFloat(e.target.value) })
-            }
-          />
-
-          <TextField
-            select
-            fullWidth
-            label="Category"
-            value={form.category}
-            onChange={(e) => setForm({ ...form, category: e.target.value })}
-          >
-            <MenuItem value="BreakFast">BreakFast</MenuItem>
-            <MenuItem value="Lunch">Lunch</MenuItem>
-            <MenuItem value="dinner">Dinner</MenuItem>
-          </TextField>
-
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={form.inStock}
-                onChange={(e) => setForm({ ...form, inStock: e.target.checked })}
-              />
-            }
-            label="In Stock"
-          />
-
-          <Button
-            variant="outlined"
-            component="label"
-            sx={{ textTransform: "none" }}
-          >
-            {image ? 'Change Image' : 'Select Image'}
-            <input
-              hidden
-              accept="image/*"
-              type="file"
-              onChange={(e) => setImage(e.target.files?.[0] || null)}
+            <TextField
+              fullWidth
+              label="Item Name"
+              value={form.itemname}
+              onChange={(e) => setForm({ ...form, itemname: e.target.value })}
             />
-          </Button>
 
-          {/* Action Buttons */}
-          <Stack direction="row" spacing={2} mt={1}>
+            <TextField
+              fullWidth
+              label="Price"
+              type="number"
+              value={form.price}
+              onChange={(e) =>
+                setForm({ ...form, price: parseFloat(e.target.value) })
+              }
+            />
+
+            <TextField
+              fullWidth
+              label="Stock Quantity"
+              type="number"
+              inputProps={{ min: 0 }}
+              value={String(form.stock ?? 0)}
+              onChange={(e) =>
+                setForm({ ...form, stock: Math.max(0, Number(e.target.value || 0)) })
+              }
+            />
+
+            <TextField
+              select
+              fullWidth
+              label="Category"
+              value={form.category}
+              onChange={(e) => setForm({ ...form, category: e.target.value })}
+            >
+              <MenuItem value="BreakFast">BreakFast</MenuItem>
+              <MenuItem value="Lunch">Lunch</MenuItem>
+              <MenuItem value="dinner">Dinner</MenuItem>
+            </TextField>
+
             <Button
-              variant="contained"
-              fullWidth
-              onClick={addItem}
-              sx={{ py: 1 }}
-              disabled={loading || !image}
+              variant="outlined"
+              component="label"
+              sx={{ textTransform: "none" }}
             >
-              {loading ? 'Adding...' : 'Add Item'}
+              {image ? "Change Image" : "Select Image"}
+              <input
+                hidden
+                accept="image/*"
+                type="file"
+                onChange={(e) => setImage(e.target.files?.[0] || null)}
+              />
             </Button>
-            {/* <Button
-              variant="contained"
-              color="error"
-              fullWidth
-              onClick={() => updateItem(form)}
-              sx={{ py: 1 }}
-            >
-              Update Item
-            </Button> */}
-          </Stack>
+
+            <Stack direction="row" spacing={2}>
+              <Button
+                variant="contained"
+                fullWidth
+                onClick={addItem}
+                disabled={loading || !image}
+              >
+                {loading ? "Adding..." : "Add Item"}
+              </Button>
+            </Stack>
           </Stack>
 
-          <Box sx={{ width: { xs: '100%', md: 260 }, display: 'flex', justifyContent: 'center', alignItems: 'flex-start' }}>
-            <Paper variant="outlined" sx={{ width: '100%', p: 2, textAlign: 'center', borderRadius: 2 }}>
+          <Box
+            sx={{
+              width: { xs: "100%", md: 260 },
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "flex-start",
+            }}
+          >
+            <Paper
+              variant="outlined"
+              sx={{
+                width: "100%",
+                p: 2,
+                textAlign: "center",
+                borderRadius: 2,
+              }}
+            >
               {preview ? (
-                <Box component="img" src={preview} alt="preview" sx={{ width: '100%', height: 180, objectFit: 'cover', borderRadius: 1 }} />
+                <Box
+                  component="img"
+                  src={preview}
+                  alt="preview"
+                  sx={{
+                    width: "100%",
+                    height: 180,
+                    objectFit: "cover",
+                    borderRadius: 1,
+                  }}
+                />
               ) : (
-                <Box sx={{ width: '100%', height: 180, bgcolor: 'action.hover', display: 'flex', justifyContent: 'center', alignItems: 'center', borderRadius: 1 }}>
-                  <Typography color="text.secondary">No image selected</Typography>
+                <Box
+                  sx={{
+                    width: "100%",
+                    height: 180,
+                    bgcolor: "action.hover",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    borderRadius: 1,
+                  }}
+                >
+                  <Typography color="text.secondary">
+                    No image selected
+                  </Typography>
                 </Box>
               )}
-              <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>{image ? image.name : 'Select an image to preview'}</Typography>
+              <Typography variant="caption" sx={{ mt: 1, display: "block" }}>
+                {image ? image.name : "Select an image to preview"}
+              </Typography>
             </Paper>
           </Box>
         </Box>
@@ -187,6 +199,6 @@ export default function Admin() {
           </Typography>
         )}
       </Paper>
-    </Box>
+    </Container>
   );
 }

@@ -19,25 +19,81 @@ import {
   Snackbar,
   Alert,
   Tooltip,
+  TextField,
+  Tabs,
+  Tab,
 } from "@mui/material";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import CancelIcon from "@mui/icons-material/Cancel";
 import SearchIcon from "@mui/icons-material/Search";
+import ImageIcon from "@mui/icons-material/Image";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import { DataGrid, GridActionsCellItem } from "@mui/x-data-grid";
 import { post } from "../utils/api"; // your API util
+
+// Barcode listener utility
+function listenToKeyboardInput(callback) {
+  let buffer = "";
+  const timeoutDuration = 100; // ms between characters (adjust if needed)
+  let timeout;
+
+  const handleKeydown = (e) => {
+    // Only capture if focus is not in an input field
+    if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+
+    if (e.key === "Enter") {
+      if (buffer.trim()) {
+        callback(buffer.trim());
+      }
+      buffer = "";
+      clearTimeout(timeout);
+    } else if (e.key.length === 1) {
+      buffer += e.key;
+      clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        buffer = "";
+      }, timeoutDuration);
+    }
+  };
+
+  window.addEventListener("keydown", handleKeydown);
+
+  // Return cleanup function
+  return () => {
+    window.removeEventListener("keydown", handleKeydown);
+    clearTimeout(timeout);
+  };
+}
 
 // Server endpoints used:
 // - POST /order/getOrderList        -> returns array of orders
 // - POST /users/getUserId           -> get user details (body: { username })
 // - POST /order/cancelOrder         -> cancel order (body: { orderedBy, orderNumber })
+// - POST /order/markCompleteByBarcode -> mark order as completed (body: { barcode })
 
 export default function OrdersAdmin() {
   const [rows, setRows] = useState([]);
+  const [allRows, setAllRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [selectedCancel, setSelectedCancel] = useState(null); // orderNumber
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [receiptUrl, setReceiptUrl] = useState("");
   const [snack, setSnack] = useState({ open: false, severity: "info", message: "" });
   const [pageSize, setPageSize] = useState(10);
-    const { user } = useContext(CartContext);
+  const [scannerActive, setScannerActive] = useState(true);
+  const [lastScannedBarcode, setLastScannedBarcode] = useState("");
+  const [testBarcode, setTestBarcode] = useState("");
+  const { user } = useContext(CartContext);
+  const [activeTab, setActiveTab] = useState("pre");
+
+  const filterRowsByTab = useCallback(
+    (list, tab) => list.filter((order) => {
+      if (tab === "pre") return order.pre === true;
+      if (tab === "normal") return order.status === "cancelled";
+      return true;
+    }),
+    []
+  );
   
 
   // Basic fetch - adapt if you want server-side pagination
@@ -47,17 +103,22 @@ export default function OrdersAdmin() {
       const res = await post("/order/getOrderList");
       if (res && Array.isArray(res.data)) {
         // normalize rows - ensure id field for DataGrid
-        const normalized = res.data.map((o) => ({
-          id: o.orderNumber,
-          orderNumber: o.orderNumber,
-          orderedBy: o.orderedBy || (o.user && o.user.username) || "—",
-          itemsCount: o.items ? o.items.length : 0,
-          total: o.total || o.amount || "—",
-          status: (o.status || "pending").toLowerCase(),
-          // createdAt: o.createdAt || o.date || null,
-          // raw: o,
-        }));
-        setRows(normalized);
+        const normalized = res.data
+          .map((o) => ({
+            id: o.orderNumber,
+            orderNumber: o.orderNumber,
+            orderedBy: o.orderedBy || (o.user && o.user.username) || "—",
+            itemsCount: o.items ? o.items.length : 0,
+            total: o.totalprice || o.total || o.amount || "—",
+            status: (o.status || "pending").toLowerCase(),
+            pre: o.pre || false,
+            receiptImageUrl: o.receiptImageUrl || o.receiptImageurl || "",
+            receiptImageUrlNoBarcode: o.receiptImageUrlNoBarcode || "",
+            // raw: o,
+          }))
+          ;
+        setAllRows(normalized);
+        setRows(filterRowsByTab(normalized, activeTab));
       } else {
         setRows([]);
         setSnack({ open: true, severity: "info", message: res?.message || "No orders found" });
@@ -68,11 +129,58 @@ export default function OrdersAdmin() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [activeTab, filterRowsByTab]);
 
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
+
+  // Handle barcode processing
+  const processBarcode = async (barcode) => {
+    if (!barcode.trim()) {
+      setSnack({ open: true, severity: "warning", message: "Empty barcode received" });
+      return;
+    }
+
+    console.log("Processing barcode:", barcode);
+    setLastScannedBarcode(barcode);
+
+    try {
+      const res = await post("/order/markCompleteByBarcode", { barcode });
+      console.log("API response:", res);
+      
+      if (res && res.data) {
+        // Update the row with the new status
+        const updatedOrderNumber = res.data.orderNumber;
+        setAllRows((prev) => prev.map((row) =>
+          row.orderNumber === updatedOrderNumber || row.id === updatedOrderNumber
+            ? { ...row, status: "completed" }
+            : row
+        ));
+        setRows((prev) => filterRowsByTab(
+          prev.map((row) =>
+            row.orderNumber === updatedOrderNumber || row.id === updatedOrderNumber
+              ? { ...row, status: "completed" }
+              : row
+          ),
+          activeTab
+        ));
+        setSnack({ open: true, severity: "success", message: `Order ${updatedOrderNumber} marked as completed` });
+      }
+    } catch (err) {
+      console.error("Barcode processing error:", err);
+      setSnack({ open: true, severity: "error", message: `Failed: ${err?.message || "Unknown error"}` });
+    }
+  };
+
+  // Barcode scanner useEffect
+  useEffect(() => {
+    const cleanup = listenToKeyboardInput((barcode) => {
+      processBarcode(barcode);
+    });
+
+    return cleanup;
+  }, []);
 
   // Cancel flow: ask user id then cancel
   const handleConfirmCancel = async () => {
@@ -104,21 +212,51 @@ export default function OrdersAdmin() {
     }
   };
 
+  // Accept order -> set status to preparing
+  const handleAccept = async (orderNumber) => {
+    setLoading(true);
+    try {
+      const res = await post("/order/markPreparing", { orderNumber });
+      if (res && res.data) {
+        const updatedStatus = (res.data.status || "preparing").toLowerCase();
+        setAllRows((prev) => prev.map((r) => (r.orderNumber === orderNumber ? { ...r, status: updatedStatus } : r)));
+        setRows((prev) => filterRowsByTab(
+          prev.map((r) => (r.orderNumber === orderNumber ? { ...r, status: updatedStatus } : r)),
+          activeTab
+        ));
+        setSnack({ open: true, severity: "success", message: `Order ${orderNumber} is now preparing` });
+      }
+    } catch (err) {
+      setSnack({ open: true, severity: "error", message: err?.message || "Failed to accept order" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const getStatusChip = (status) => {
     const s = (status || "pending").toLowerCase();
     const label = s.charAt(0).toUpperCase() + s.slice(1);
     if (s === "delivered") return <Chip label={label} color="success" size="small" />;
     if (s === "preparing") return <Chip label={label} color="warning" size="small" />;
     if (s === "canceled") return <Chip label={label} color="error" size="small" />;
+    if (s === "completed") return <Chip label={label} color="success" size="small" />;
     return <Chip label={label} color="primary" size="small" />;
   };
 
   // Columns
   const columns = [
-    { field: "orderNumber", headerName: "Order #", flex: 1, minWidth: 140, sortable: true },
+    { field: "orderNumber", headerName: "Order Id", flex: 1, minWidth: 140, sortable: true },
     { field: "orderedBy", headerName: "Ordered By", flex: 1, minWidth: 160, sortable: true },
     { field: "itemsCount", headerName: "Items", width: 100, type: "number", align: "center", headerAlign: "center" },
-    { field: "total", headerName: "Total", width: 120, valueFormatter: (p) => (p.value ? `₹${p.value}` : "—") },
+    { 
+      field: "total", 
+      headerName: "Total", 
+      width: 120, 
+      valueFormatter: (params) => {
+        const value = params.value ?? params;
+        return (value !== "—" && value !== null && value !== undefined) ? `₹${value}` : "—";
+      }
+    },
     {
       field: "status",
       headerName: "Status",
@@ -127,28 +265,53 @@ export default function OrdersAdmin() {
       sortable: true,
     },
     {
-      field: "createdAt",
-      headerName: "Created",
-      width: 200,
-      // valueGetter: (params) => {
-      //   // const v = params.row.createdAt;
-      //   return v ? new Date(v).toLocaleString() : "";
-      // },
+      field: "bill",
+      headerName: "Bill",
+      width: 140,
+      renderCell: (params) => (
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={<ImageIcon />}
+          disabled={!params.row.receiptImageUrlNoBarcode}
+          onClick={() => {
+            setReceiptUrl(params.row.receiptImageUrlNoBarcode);
+            setReceiptOpen(true);
+          }}
+          sx={{ textTransform: "none", borderRadius: 2 }}
+        >
+          Bill
+        </Button>
+      ),
+      sortable: false,
+      filterable: false,
     },
     {
       field: "actions",
       type: "actions",
       headerName: "Actions",
-      width: 120,
+      width: 180,
       getActions: (params) => [
         <GridActionsCellItem
           icon={
+            <Tooltip title="Accept order">
+              <CheckCircleIcon color={params.row.status === "pending" ? "success" : "disabled"} />
+            </Tooltip>
+          }
+          label="Accept"
+          disabled={params.row.status !== "pending"}
+          onClick={() => handleAccept(params.row.orderNumber)}
+          showInMenu={false}
+          key="accept"
+        />,
+        <GridActionsCellItem
+          icon={
             <Tooltip title="Cancel order">
-              <CancelIcon color={params.row.status === "canceled" ? "disabled" : "error"} />
+              <CancelIcon color={(params.row.status === "cancelled" || params.row.status === "completed") ? "disabled" : "error"} />
             </Tooltip>
           }
           label="Cancel"
-          disabled={params.row.status === "canceled"}
+          disabled={params.row.status === "cancelled" || params.row.status === "completed"}
           onClick={() => setSelectedCancel(params.row.orderNumber)}
           showInMenu={false}
           key="cancel"
@@ -165,16 +328,28 @@ export default function OrdersAdmin() {
             Admin — Orders
           </Typography>
 
-          <Button
-            variant="outlined"
-            startIcon={<SearchIcon />}
-            onClick={fetchOrders}
-            disabled={loading}
-            aria-label="refresh orders"
+          <Tabs
+            value={activeTab}
+            onChange={(_, val) => {
+              setActiveTab(val);
+              setRows(filterRowsByTab(allRows, val));
+            }}
+            textColor="primary"
+            indicatorColor="primary"
+            sx={{ minHeight: 36, height: 36 }}
           >
-            Refresh
-          </Button>
+            <Tab value="pre" label="Pre-orders" sx={{ minHeight: 36, height: 36 }} />
+            <Tab value="normal" label="Cancelled orders" sx={{ minHeight: 36, height: 36 }} />
+          </Tabs>
 
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Chip 
+              label={scannerActive ? "🔴 Scanner Active" : "⚫ Scanner Off"} 
+              color={scannerActive ? "success" : "default"} 
+              variant="outlined"
+              size="small"
+            />
+          </Box>
           <IconButton onClick={fetchOrders} color="inherit" aria-label="refresh">
             <RefreshIcon />
           </IconButton>
@@ -223,6 +398,21 @@ export default function OrdersAdmin() {
           >
             Confirm Cancel
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Receipt dialog */}
+      <Dialog open={receiptOpen} onClose={() => setReceiptOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Order Receipt</DialogTitle>
+        <DialogContent sx={{ display: "flex", justifyContent: "center", alignItems: "center" }}>
+          {receiptUrl ? (
+            <Box component="img" src={receiptUrl} alt="Order receipt" sx={{ width: "100%", borderRadius: 1 }} />
+          ) : (
+            <DialogContentText>No receipt image available for this order.</DialogContentText>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReceiptOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
 

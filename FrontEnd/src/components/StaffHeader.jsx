@@ -50,7 +50,7 @@ export default function Header() {
             fontWeight={700}
             sx={{ letterSpacing: 0.5, color: isDark ? "#f1f5f9" : "white" }}
           >
-            DBIT Canteen – Admin
+            DBIT Canteen – Staff
           </Typography>
 
           {/* Nav Links */}
@@ -69,18 +69,7 @@ export default function Header() {
               },
             }}
           >
-            <Button
-              component={RouterLink}
-              to="/admin/dashboard"
-              sx={{
-                textTransform: "none",
-                fontSize: "0.95rem",
-                fontWeight: 600,
-                color: isDark ? "#f1f5f9" : "white",
-              }}
-            >
-              Dashboard
-            </Button>
+
             <Button
               component={RouterLink}
               to="/product-entry"
@@ -91,7 +80,7 @@ export default function Header() {
                 color: isDark ? "#f1f5f9" : "white",
               }}
             >
-              Product Entry
+                Product Entry
             </Button>
 
             <Button
@@ -120,18 +109,6 @@ export default function Header() {
               Orders
             </Button>
 
-            <Button
-              component={RouterLink}
-              to="/admin/users"
-              sx={{
-                textTransform: "none",
-                fontSize: "0.95rem",
-                fontWeight: 600,
-                color: isDark ? "#f1f5f9" : "white",
-              }}
-            >
-              Users
-            </Button>
 
             {/* Theme Toggle */}
             <IconButton 

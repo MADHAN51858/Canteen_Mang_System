@@ -66,22 +66,25 @@ import {
   Stack,
   Tooltip,
   TextField,
-  Checkbox,
-  FormControlLabel,
 } from "@mui/material";
 import AddShoppingCartIcon from "@mui/icons-material/AddShoppingCart";
 import DeleteIcon from "@mui/icons-material/Delete";
 
 export default function FoodCard({ item, onAdd, onRemove, onUpdate }) {
-  const { user } = useContext(CartContext);
+  const { user, cart, increaseQuantity, decreaseQuantity } = useContext(CartContext);
   const rv = String((user && user.role) || "").toLowerCase();
+
+  // Check if item is in cart and get its quantity
+  const cartItem = cart.find(i => i._id === item._id);
+  const inCart = !!cartItem;
+  const quantity = cartItem?.quantity || 0;
 
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     itemname: item.itemname,
     price: item.price,
     category: item.category || "",
-    inStock: !!item.inStock,
+    stock: Number(item.stock || 0),
   });
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(item.image || null);
@@ -98,7 +101,7 @@ export default function FoodCard({ item, onAdd, onRemove, onUpdate }) {
   fd.append('itemname', form.itemname);
   fd.append('price', String(form.price));
   fd.append('category', form.category);
-  fd.append('inStock', form.inStock ? 'true' : 'false');
+  fd.append('stock', String(form.stock ?? 0));
   if (file) fd.append('image', file);
   const res = await postForm('/food/updateItem', fd);
       if (res?.status === 200 || res?.success) {
@@ -131,6 +134,8 @@ export default function FoodCard({ item, onAdd, onRemove, onUpdate }) {
 
   const isAdmin = rv.includes("admin");
   const isStudent = rv.includes("student");
+  const currentCartQty = cartItem?.quantity || 0;
+  const remaining = Math.max(0, Number(item.stock || 0) - currentCartQty);
 
   return (
     <Card
@@ -196,7 +201,7 @@ export default function FoodCard({ item, onAdd, onRemove, onUpdate }) {
                   fontWeight: 600,
                 }}
               >
-                {item.inStock ? "✓ In Stock" : "Out of Stock"}
+                {item.inStock ? `✓ In Stock (${remaining} left)` : "Out of Stock"}
               </Typography>
             )}
           </>
@@ -247,9 +252,15 @@ export default function FoodCard({ item, onAdd, onRemove, onUpdate }) {
                 style={{ marginTop: 6 }}
               />
             </Box>
-            <FormControlLabel
-              control={<Checkbox checked={!!form.inStock} onChange={(e) => setForm((s) => ({ ...s, inStock: e.target.checked }))} />}
-              label="In Stock"
+            {/* In Stock is derived from stock; checkbox removed */}
+            <TextField
+              label="Stock"
+              type="number"
+              inputProps={{ min: 0 }}
+              value={String(form.stock ?? 0)}
+              onChange={(e) => setForm((s) => ({ ...s, stock: Math.max(0, Number(e.target.value || 0)) }))}
+              size="small"
+              fullWidth
             />
             {msg && <Typography variant="caption" color="error">{msg}</Typography>}
           </Box>
@@ -312,7 +323,7 @@ export default function FoodCard({ item, onAdd, onRemove, onUpdate }) {
                   size="small"
                   onClick={() => {
                     setEditing(false);
-                    setForm({ itemname: item.itemname, price: item.price, category: item.category || "", inStock: !!item.inStock });
+                    setForm({ itemname: item.itemname, price: item.price, category: item.category || "", stock: Number(item.stock || 0) });
                     setMsg("");
                   }}
                   sx={{ fontWeight: 600, textTransform: "none", borderRadius: 2 }}
@@ -324,23 +335,91 @@ export default function FoodCard({ item, onAdd, onRemove, onUpdate }) {
           </>
         )}
         {isStudent && (
-          <Tooltip title="Add to cart">
-            <Button
-              variant="contained"
-              color="primary"
-              size="small"
-              onClick={() => onAdd(item)}
-              startIcon={<AddShoppingCartIcon />}
-              sx={{
-                fontWeight: 600,
-                textTransform: "none",
-                borderRadius: 2,
-                whiteSpace: "nowrap",
-              }}
-            >
-              Add
-            </Button>
-          </Tooltip>
+          <>
+            {!inCart ? (
+              <Tooltip title="Add to cart">
+                <Button
+                  variant="contained"
+                  color="primary"
+                  size="small"
+                  onClick={() => onAdd(item)}
+                  disabled={Number(item.stock || 0) <= 0}
+                  startIcon={<AddShoppingCartIcon />}
+                  sx={{
+                    fontWeight: 600,
+                    textTransform: "none",
+                    borderRadius: 2,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {Number(item.stock || 0) > 0 ? "Add" : "Out of Stock"}
+                </Button>
+              </Tooltip>
+            ) : (
+              <Box 
+                sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: 1,
+                  bgcolor: 'primary.light',
+                  borderRadius: 2,
+                  p: 0.5
+                }}
+              >
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={() => decreaseQuantity(item._id)}
+                  sx={{
+                    minWidth: 32,
+                    width: 32,
+                    height: 32,
+                    p: 0,
+                    bgcolor: 'white',
+                    color: 'primary.main',
+                    fontWeight: 700,
+                    fontSize: '1.2rem',
+                    '&:hover': {
+                      bgcolor: 'grey.100',
+                    },
+                  }}
+                >
+                  −
+                </Button>
+                <Typography 
+                  sx={{ 
+                    minWidth: 24, 
+                    textAlign: 'center', 
+                    fontWeight: 700,
+                    color: 'white'
+                  }}
+                >
+                  {quantity}
+                </Typography>
+                <Button
+                  variant="contained"
+                  size="small"
+                  onClick={() => increaseQuantity(item._id)}
+                  disabled={remaining <= 0}
+                  sx={{
+                    minWidth: 32,
+                    width: 32,
+                    height: 32,
+                    p: 0,
+                    bgcolor: 'white',
+                    color: 'primary.main',
+                    fontWeight: 700,
+                    fontSize: '1.2rem',
+                    '&:hover': {
+                      bgcolor: 'grey.100',
+                    },
+                  }}
+                >
+                  +
+                </Button>
+              </Box>
+            )}
+          </>
         )}
       </Stack>
     </Card>

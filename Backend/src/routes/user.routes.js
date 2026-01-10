@@ -10,8 +10,14 @@ import {
     getUserId,
     orderFood,
     getAllUsers,
-    cancelOrder
-    
+    cancelOrder,
+    getMe,
+    updateUserRole,
+    toggleBlockUser,
+    deleteUser,
+    addMoneyToWallet,
+    deductFromWallet,
+    updateProfile,
 } from "../controllers/user.controller.js"
 import { verifyJwt } from "../middlewares/auth.middleware.js"
 
@@ -20,14 +26,20 @@ const router = Router()
 router.route("/register").post(registerUser)
 router.route("/login").post(login)
 router.route("/logout").post(verifyJwt, logout)
-router.route("/addFriends").post(addFriends)
-router.route("/findUser").post(findUser)
-router.route("/getAllUsers").post(getAllUsers)
-router.route("/removeFreinds").post(removeFreinds)
-router.route("/getFreiendsList").post(getFreiendsList)
-router.route("/getUserId").post(getUserId)
-router.route("/orderFood").post(orderFood)
-router.route("/cancelOrder").post(cancelOrder)
-
+router.route("/getMe").get(verifyJwt, getMe)
+router.route("/updateRole").post(verifyJwt, updateUserRole)
+router.route("/updateProfile").post(verifyJwt, updateProfile)
+router.route("/toggleBlockUser").post(verifyJwt, toggleBlockUser)
+router.route("/deleteUser").post(verifyJwt, deleteUser)
+router.route("/addFriends").post(verifyJwt,addFriends)
+router.route("/findUser").post(verifyJwt,findUser)
+router.route("/getAllUsers").post(verifyJwt,getAllUsers)
+router.route("/removeFreinds").post(verifyJwt,removeFreinds)
+router.route("/getFreiendsList").post(verifyJwt,getFreiendsList)
+router.route("/getUserId").post(verifyJwt,getUserId)
+router.route("/orderFood").post(verifyJwt,orderFood)
+router.route("/cancelOrder").post(verifyJwt,cancelOrder)
+router.route("/addMoney").post(verifyJwt, addMoneyToWallet)
+router.route("/deductFromWallet").post(verifyJwt, deductFromWallet)
 
 export default router;

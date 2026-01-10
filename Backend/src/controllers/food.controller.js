@@ -10,14 +10,14 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js";
 const addItem = asyncHandler(async (req, res) => {
   // When using multer + multipart/form-data, req.body values are strings.
   // Accept string values and coerce them properly. Also allow price = 0.
-  let { itemname, price, category, inStock } = req.body || {};
+  let { itemname, price, category, stock } = req.body || {};
 
   // check presence (undefined or null) rather than truthiness to allow falsy but valid values
   if (
     typeof itemname === "undefined" ||
     typeof price === "undefined" ||
     typeof category === "undefined" ||
-    typeof inStock === "undefined"
+    typeof stock === "undefined"
   ) {
     throw new ApiError(400, "All fields are Required");
   }
@@ -28,11 +28,12 @@ const addItem = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Invalid price");
   }
 
-  const inStockBool =
-    inStock === true ||
-    inStock === "true" ||
-    inStock === "on" ||
-    inStock === "1";
+  const parsedStock = Number(stock);
+  if (Number.isNaN(parsedStock) || parsedStock < 0) {
+    throw new ApiError(400, "Invalid stock quantity");
+  }
+
+  const inStockBool = parsedStock > 0;
 
   if (typeof itemname === "string") itemname = itemname.trim();
 
@@ -42,7 +43,6 @@ const addItem = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Product Already Exists");
   }
 
-  console.log("FILE:", req.file);
 
   let imageUrl;
   if (req.file) {
@@ -56,6 +56,7 @@ const addItem = asyncHandler(async (req, res) => {
     image: imageUrl,
     category,
     inStock: inStockBool,
+    stock: parsedStock,
   });
 
   if (!Product) {
@@ -75,7 +76,7 @@ const addItem = asyncHandler(async (req, res) => {
 const updateItem = asyncHandler(async (req, res) => {
   // Simple req.body based update handler.
   // Accepts either { id, ...fields } or { oldItemname, ...fields }
-  const { id, oldItemname, itemname, price, category, inStock, image } =
+  const { id, oldItemname, itemname, price, category, inStock, image, stock } =
     req.body || {};
 
   if (!id && !oldItemname) {
@@ -105,6 +106,16 @@ const updateItem = asyncHandler(async (req, res) => {
       inStock === "true" ||
       inStock === "1" ||
       inStock === "on";
+  }
+
+  if (typeof stock !== "undefined") {
+    const s = Number(stock);
+    if (Number.isNaN(s) || s < 0) throw new ApiError(400, "Invalid stock quantity");
+    update.stock = s;
+    // keep inStock consistent with stock when explicitly provided
+    if (typeof update.inStock === "undefined") {
+      update.inStock = s > 0;
+    }
   }
 
   if (typeof image !== "undefined") update.image = image;
@@ -186,4 +197,12 @@ const getItemsBasedOnCategory = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, AllItems, "All Items Fetched Succesfully"));
 });
 
-export { addItem, updateItem, removeItem, getItemsBasedOnCategory };
+const getAllFoods = asyncHandler(async (req, res) => {
+  const foods = await Food.find();
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, foods, "All foods fetched successfully"));
+});
+
+export { addItem, updateItem, removeItem, getItemsBasedOnCategory, getAllFoods };

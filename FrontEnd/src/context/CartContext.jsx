@@ -33,7 +33,20 @@ export function CartProvider({children}){
 
   function addToCart(item){
     setCart(prev => {
-      const next = [...prev, item]
+      // Check if item already exists
+      const existingIndex = prev.findIndex(i => i._id === item._id)
+      let next
+      if (existingIndex >= 0) {
+        // Item exists, increase quantity
+        next = [...prev]
+        next[existingIndex] = {
+          ...next[existingIndex],
+          quantity: (next[existingIndex].quantity || 1) + 1
+        }
+      } else {
+        // New item, add with quantity 1
+        next = [...prev, { ...item, quantity: 1 }]
+      }
       try { localStorage.setItem('cart', JSON.stringify(next)) } catch (e) {}
       return next
     })
@@ -41,11 +54,34 @@ export function CartProvider({children}){
 
   function removeFromCart(id){
     setCart(prev => {
-      // remove only the first occurrence of an item with matching product id
-      const idx = prev.findIndex(i => i._id === id)
-      if (idx === -1) return prev
-      const next = [...prev]
-      next.splice(idx, 1)
+      const next = prev.filter(i => i._id !== id)
+      try { localStorage.setItem('cart', JSON.stringify(next)) } catch (e) {}
+      return next
+    })
+  }
+
+  function increaseQuantity(id){
+    setCart(prev => {
+      const next = prev.map(item => 
+        item._id === id 
+          ? { ...item, quantity: (item.quantity || 1) + 1 }
+          : item
+      )
+      try { localStorage.setItem('cart', JSON.stringify(next)) } catch (e) {}
+      return next
+    })
+  }
+
+  function decreaseQuantity(id){
+    setCart(prev => {
+      const next = prev.map(item => {
+        if (item._id === id) {
+          const newQty = (item.quantity || 1) - 1
+          if (newQty <= 0) return null // will be filtered out
+          return { ...item, quantity: newQty }
+        }
+        return item
+      }).filter(Boolean)
       try { localStorage.setItem('cart', JSON.stringify(next)) } catch (e) {}
       return next
     })
@@ -61,7 +97,7 @@ export function CartProvider({children}){
   }
 
   return (
-    <CartContext.Provider value={{cart, addToCart, removeFromCart, clearCart, clearUser, user, login, logout}}>
+    <CartContext.Provider value={{cart, addToCart, removeFromCart, clearCart, clearUser, user, login, logout, increaseQuantity, decreaseQuantity}}>
       {children}
     </CartContext.Provider>
   )

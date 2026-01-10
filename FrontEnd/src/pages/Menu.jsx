@@ -1,4 +1,4 @@
-import { useEffect, useState, useContext } from "react";
+import { useEffect, useState, useContext, useCallback } from "react";
 import { getCategoryItems } from "../utils/api";
 import FoodCard from "../components/FoodCard";
 import { CartContext } from "../context/CartContext";
@@ -6,22 +6,29 @@ import { CartContext } from "../context/CartContext";
 import {
   Box,
   Typography,
-  FormControl,
-  Select,
-  MenuItem,
   Paper,
   Grid,
   Container,
   Stack,
   Skeleton,
+  Tabs,
+  Tab,
+  Button,
 } from "@mui/material";
 import RestaurantMenuIcon from "@mui/icons-material/RestaurantMenu";
+import RefreshIcon from "@mui/icons-material/Refresh";
 
 export default function Menu() {
   const [category, setCategory] = useState("BreakFast");
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const { addToCart } = useContext(CartContext);
+
+  const categories = [
+    { value: "BreakFast", label: "BreakFast", emoji: "🌅" },
+    { value: "Lunch", label: "Lunch", emoji: "🍽️" },
+    { value: "dinner", label: "Dinner", emoji: "🌙" },
+  ];
 
   function handleRemove(itemname) {
     setItems((prev) => prev.filter((it) => it.itemname !== itemname));
@@ -31,15 +38,26 @@ export default function Menu() {
     setItems((prev) => prev.map((it) => (String(it._id) === String(updatedItem._id) ? updatedItem : it)));
   }
 
+  const fetchItems = useCallback(
+    async (nextCategory) => {
+      const targetCat = nextCategory || category;
+      setLoading(true);
+      try {
+        const r = await getCategoryItems(targetCat);
+        setItems(r?.data || []);
+      } catch (err) {
+        console.error(err);
+        setItems([]);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [category]
+  );
+
   useEffect(() => {
-    setLoading(true);
-    getCategoryItems(category)
-      .then((r) => {
-        if (r && r.data) setItems(r.data);
-      })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [category]);
+    fetchItems(category);
+  }, [category, fetchItems]);
 
   return (
     <Box
@@ -58,7 +76,7 @@ export default function Menu() {
           </Typography>
         </Stack>
 
-        {/* Category Filter */}
+        {/* Category Tabs + Refresh */}
         <Paper
           elevation={2}
           sx={{
@@ -70,46 +88,51 @@ export default function Menu() {
             borderColor: "divider",
           }}
         >
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems={{ xs: "flex-start", sm: "center" }}>
-            <Typography variant="subtitle1" fontWeight={700} sx={{ minWidth: 80 }}>
-              Category:
-            </Typography>
-            <FormControl sx={{ minWidth: 200 }}>
-              <Select
+          <Stack
+            direction={{ xs: "column", sm: "row" }}
+            spacing={2}
+            alignItems={{ xs: "flex-start", sm: "center" }}
+            justifyContent="space-between"
+          >
+            <Box sx={{ flex: 1 }}>
+              <Tabs
                 value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                sx={{
-                  borderRadius: 2,
-                  fontWeight: 600,
-                  transition: "all 0.3s",
-                  "&:focus-visible": {
-                    outline: "2px solid",
-                    outlineColor: "primary.main",
-                  },
-                }}
+                onChange={(_, val) => setCategory(val)}
+                variant="scrollable"
+                allowScrollButtonsMobile
+                sx={{ minHeight: 48, '& .MuiTab-root': { textTransform: 'none', fontWeight: 700 } }}
               >
-                <MenuItem value="BreakFast">🌅 BreakFast</MenuItem>
-                <MenuItem value="Lunch">🍽️ Lunch</MenuItem>
-                <MenuItem value="dinner">🌙 Dinner</MenuItem>
-              </Select>
-            </FormControl>
+                {categories.map((c) => (
+                  <Tab key={c.value} value={c.value} label={`${c.emoji} ${c.label}`} />
+                ))}
+              </Tabs>
+            </Box>
 
-            {items.length > 0 && (
-              <Box
-                sx={{
-                  ml: "auto",
-                  px: 2,
-                  py: 0.7,
-                  bgcolor: "success.light",
-                  color: "success.dark",
-                  borderRadius: 2,
-                  fontWeight: 700,
-                  fontSize: "0.9rem",
-                }}
+            <Stack direction="row" spacing={1} alignItems="center">
+              {items.length > 0 && (
+                <Box
+                  sx={{
+                    px: 2,
+                    py: 0.7,
+                    bgcolor: "success.light",
+                    color: "success.dark",
+                    borderRadius: 2,
+                    fontWeight: 700,
+                    fontSize: "0.9rem",
+                  }}
+                >
+                  {items.length} items
+                </Box>
+              )}
+              <Button
+                variant="outlined"
+                startIcon={<RefreshIcon />}
+                onClick={() => fetchItems()}
+                disabled={loading}
               >
-                {items.length} items available
-              </Box>
-            )}
+                Refresh
+              </Button>
+            </Stack>
           </Stack>
         </Paper>
 

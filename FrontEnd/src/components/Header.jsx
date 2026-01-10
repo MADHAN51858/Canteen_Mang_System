@@ -7,6 +7,7 @@ import { useState, useContext } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { CartContext } from "../context/CartContext";
 import { ThemeContext } from "../context/ThemeContext";
+import { logout as apiLogout } from "../utils/api";
 import {
   AppBar,
   Toolbar,
@@ -32,19 +33,20 @@ export default function Header() {
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  function handleLogout() {
+  async function handleLogout() {
+    await apiLogout();
     clearCart();
     clearUser();
     localStorage.clear();
-    navigate("/");
+    navigate("/login");
   }
 
   const navItems = [
     { label: "Menu", to: "/student/menu" },
     { label: "Cart", to: "/student/cart", cartCount: cart.length },
     { label: "Orders", to: "/student/orders" },
-    { label: "Friends List", to: "/student/get-friends" },
-    { label: "Add Friends", to: "/student/add-friends" },
+    { label: "Wallet", to: "/student/wallet" },
+    { label: "Profile", to: "/student/profile" },
   ];
 
   return (

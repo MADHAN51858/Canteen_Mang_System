@@ -25,12 +25,16 @@ import {
   Skeleton,
   useMediaQuery,
   Tooltip,
+  Tabs,
+  Tab,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import CancelIcon from "@mui/icons-material/Cancel";
 import SortIcon from "@mui/icons-material/Sort";
 import FilterListIcon from "@mui/icons-material/FilterList";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import QrCode2Icon from "@mui/icons-material/QrCode2";
+import ImageIcon from "@mui/icons-material/Image";
 import { post } from "../utils/api";
 
 /**
@@ -49,33 +53,46 @@ import { post } from "../utils/api";
 const PAGE_SIZE = 6; // default page size for cards grid
 
 export default function OrdersDashboard() {
-  const [username, setUsername] = useState("");
   const [orders, setOrders] = useState([]);
-  const [statusFilter, setStatusFilter] = useState("all"); // all | pending | preparing | delivered | canceled
+  const [activeTab, setActiveTab] = useState(0); // 0=pending, 1=preparing, 2=completed, 3=cancelled
   const [sortBy, setSortBy] = useState("newest"); // newest | oldest
   const [loading, setLoading] = useState(false);
   const [msgAlert, setMsgAlert] = useState(null); // { severity, text }
   const [selectedOrder, setSelectedOrder] = useState(null); // orderNumber to cancel
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [qrDialogOpen, setQrDialogOpen] = useState(false);
+  const [qrData, setQrData] = useState(null);
+  const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
+  const [receiptUrl, setReceiptUrl] = useState("");
   const [page, setPage] = useState(1);
 
   const isSm = useMediaQuery((theme) => theme.breakpoints.down("sm"));
 
-  // fetchOrders uses the real API. Keep userDetails in body as username for your server.
-  const fetchOrders = useCallback(async () => {
-    if (!username) {
-      setOrders([]);
-      setMsgAlert({ severity: "info", text: "Enter username or roll no to fetch orders." });
-      return;
+  const statusMap = ["pending", "preparing", "completed", "cancelled"];
+  const currentStatus = statusMap[activeTab];
+
+  // Filter orders based on active tab
+  const filteredOrders = useMemo(() => {
+    let filtered = orders.filter((o) => {
+      const status = (o.status || "pending").toLowerCase();
+      return status === currentStatus;
+    });
+
+    // Sort
+    if (sortBy === "newest") {
+      filtered.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+    } else {
+      filtered.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
     }
+
+    return filtered;
+  }, [orders, currentStatus, sortBy]);
+
+  // fetchOrders for current logged-in user
+  const fetchOrders = useCallback(async () => {
     setLoading(true);
     try {
-      const body = {
-        userDetails: username,
-        status: statusFilter === "all" ? undefined : statusFilter,
-        sortBy,
-      };
-      const res = await post("/order/getUserOrderList", body);
+      const res = await post("/order/getUserOrderList", {});
       if (res && res.data) {
         setOrders(Array.isArray(res.data) ? res.data : []);
         setMsgAlert(null);
@@ -90,22 +107,18 @@ export default function OrdersDashboard() {
       setLoading(false);
       setPage(1);
     }
-  }, [username, statusFilter, sortBy]);
+  }, []);
 
-  // Debounced search helper (simple debounce)
+  // Auto-fetch orders on mount and when filters change
   useEffect(() => {
-    const id = setTimeout(() => {
-      // only auto fetch on non-empty username; otherwise show prompt
-      if (username) fetchOrders();
-    }, 650);
-    return () => clearTimeout(id);
-  }, [username, statusFilter, sortBy, fetchOrders]);
+    fetchOrders();
+  }, [fetchOrders]);
 
   // client-side pagination derived
   const paginated = useMemo(() => {
     const start = (page - 1) * PAGE_SIZE;
-    return orders.slice(start, start + PAGE_SIZE);
-  }, [orders, page]);
+    return filteredOrders.slice(start, start + PAGE_SIZE);
+  }, [filteredOrders, page]);
 
   // Open cancel confirmation
   function openCancelDialog(orderNumber) {
@@ -118,20 +131,41 @@ export default function OrdersDashboard() {
     setConfirmOpen(false);
   }
 
-  // Cancel flow: fetch user id -> cancel -> refresh (optimistic minor update)
+  function openQrDialog(order) {
+    if (order?.qrcode) {
+      setQrData(order.qrcode);
+      setQrDialogOpen(true);
+    } else {
+      setMsgAlert({ severity: "info", text: "QR code not available for this order." });
+    }
+  }
+
+  function openReceiptDialog(order) {
+    const status = (order.status || "").toLowerCase();
+    const isCancelled = status === "cancelled";
+    // Use receipt without barcode for cancelled orders
+    const url = isCancelled 
+      ? (order?.receiptImageUrlNoBarcode || order?.receiptImageUrl || order?.receiptImageurl || "")
+      : (order?.receiptImageUrl || order?.receiptImageurl || "");
+    if (url) {
+      setReceiptUrl(url);
+      setReceiptDialogOpen(true);
+    } else {
+      setMsgAlert({ severity: "info", text: "Receipt image not available for this order." });
+    }
+  }
+
+  function closeQrDialog() {
+    setQrDialogOpen(false);
+    setQrData(null);
+  }
+
+  // Cancel order for current user
   async function confirmCancel() {
     if (!selectedOrder) return;
     setLoading(true);
     try {
-      // step 1: get user details (as your original flow)
-      const uidRes = await post("/users/getUserId", { username });
-      if (!(uidRes && uidRes.data)) {
-        setMsgAlert({ severity: "error", text: uidRes?.message || "Unable to fetch user details." });
-        return;
-      }
-      const userDetails = uidRes.data;
-      // step 2: cancel on server
-      const cancelRes = await post("/users/cancelOrder", { userDetails, orderNumber: selectedOrder ,cancelBy : userDetails});
+      const cancelRes = await post("/users/cancelOrder", { orderNumber: selectedOrder });
       if (cancelRes && cancelRes.message) {
         setMsgAlert({ severity: "success", text: cancelRes.message });
       } else {
@@ -160,56 +194,37 @@ export default function OrdersDashboard() {
       <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 3 }}>
         <Box>
           <Typography variant={isSm ? "h5" : "h4"} fontWeight={700}>
-            Orders Dashboard
+            My Orders
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Manage user orders — filter, sort and cancel orders with confirmations.
+            View and manage your orders by status
           </Typography>
         </Box>
-
-        <Stack direction="row" spacing={1} alignItems="center">
-          <Chip icon={<InfoOutlinedIcon />} label="Enterprise View" variant="outlined" />
-        </Stack>
       </Stack>
+
+      {/* Tabs for Status Filter */}
+      <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 3 }}>
+        <Tabs
+          value={activeTab}
+          onChange={(e, newValue) => {
+            setActiveTab(newValue);
+            setPage(1);
+            fetchOrders();
+          }}
+          variant="scrollable"
+          scrollButtons="auto"
+        >
+          <Tab label="Pending" />
+          <Tab label="Preparing" />
+          <Tab label="Completed" />
+          <Tab label="Cancelled" />
+        </Tabs>
+      </Box>
 
       {/* Filter Bar */}
       <Card variant="outlined" sx={{ mb: 3, p: 2 }}>
         <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} sm={5}>
-            <TextField
-              placeholder="Search by username or roll no"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              size="small"
-              fullWidth
-              InputProps={{
-                startAdornment: <SearchIcon sx={{ mr: 1, color: "action.active" }} />,
-                "aria-label": "username search",
-              }}
-            />
-          </Grid>
-
-          <Grid item xs={6} sm={3}>
-            <FormControl fullWidth size="small">
-              <InputLabel id="filter-status-label">
-                <FilterListIcon sx={{ mr: 0.5 }} /> Status
-              </InputLabel>
-              <Select
-                labelId="filter-status-label"
-                value={statusFilter}
-                label="Status"
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <MenuItem value="all">All</MenuItem>
-                <MenuItem value="pending">Pending</MenuItem>
-                <MenuItem value="preparing">Preparing</MenuItem>
-                <MenuItem value="delivered">Delivered</MenuItem>
-                <MenuItem value="canceled">Canceled</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-
-          <Grid item xs={6} sm={2}>
+          <Grid item xs={6} sm={8}>
             <FormControl fullWidth size="small">
               <InputLabel id="sort-by-label">
                 <SortIcon sx={{ mr: 0.5 }} /> Sort
@@ -221,15 +236,16 @@ export default function OrdersDashboard() {
             </FormControl>
           </Grid>
 
-          <Grid item xs={12} sm={2} sx={{ textAlign: { xs: "left", sm: "right" } }}>
+          <Grid item xs={6} sm={4} sx={{ textAlign: { xs: "left", sm: "right" } }}>
             <Button
               variant="contained"
               onClick={fetchOrders}
               startIcon={<SearchIcon />}
-              disabled={loading || !username}
-              aria-label="fetch orders"
+              disabled={loading}
+              aria-label="refresh orders"
+              fullWidth
             >
-              {loading ? "Loading..." : "Fetch"}
+              {loading ? "Loading..." : "Refresh"}
             </Button>
           </Grid>
         </Grid>
@@ -259,96 +275,137 @@ export default function OrdersDashboard() {
               </Grid>
             ))}
           </Grid>
-        ) : orders.length === 0 ? (
+        ) : filteredOrders.length === 0 ? (
           // Empty state
           <Card sx={{ p: 4, textAlign: "center" }}>
-            <Typography variant="h6">No orders found</Typography>
+            <Typography variant="h6">No {currentStatus} orders</Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 2 }}>
-              Try searching with a different username or change the status filter.
+              You don't have any orders with this status yet.
             </Typography>
-            <Button variant="outlined" onClick={() => { setUsername(""); setStatusFilter("all"); setSortBy("newest"); }}>
-              Reset filters
-            </Button>
           </Card>
         ) : (
           <>
             <Grid container spacing={2}>
-              {paginated.map((o) => (
-                <Grid item xs={12} sm={6} md={4} key={o.orderNumber}>
-                  <Card
-                    sx={{
-                      height: "100%",
-                      display: "flex",
-                      flexDirection: "column",
-                      justifyContent: "space-between",
-                      transition: "transform .18s ease, box-shadow .18s ease",
-                      "&:hover": {
-                        transform: "translateY(-6px)",
-                        boxShadow: (theme) => theme.shadows[6],
-                      },
-                    }}
-                    role="article"
-                    aria-label={`Order ${o.orderNumber}`}
-                  >
-                    <CardContent>
-                      <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                        <Typography variant="subtitle1" fontWeight={700}>
-                          #{o.orderNumber}
-                        </Typography>
-                        {statusChip(o.status)}
-                      </Stack>
+              {paginated.map((o) => {
+                const status = (o.status || "").toLowerCase();
+                const isCompleted = status === "completed";
+                const isCancelled = status === "cancelled";
+
+                return (
+                  <Grid item xs={12} sm={6} md={4} key={o.orderNumber}>
+                    <Card
+                      sx={{
+                        height: "100%",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "space-between",
+                        transition: "transform .18s ease, box-shadow .18s ease",
+                        "&:hover": {
+                          transform: "translateY(-6px)",
+                          boxShadow: (theme) => theme.shadows[6],
+                        },
+                      }}
+                      role="article"
+                      aria-label={`Order ${o.orderNumber}`}
+                    >
+                      <CardContent>
+                        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+                          <Typography variant="subtitle1" fontWeight={700}>
+                            #{o.orderNumber}
+                          </Typography>
+                          {statusChip(o.status)}
+                        </Stack>
 
                       <Typography variant="body2" color="text.secondary">
-                        Placed By: <b>{username}</b>
+                        Placed By: <b>{o.orderedBy || "You"}</b>
                       </Typography>
 
                       <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap" }}>
                         <Chip label={`${o.items?.length || 0} items`} size="small" />
                         <Chip label={`Total ₹${o.total || o.amount || "—"}`} size="small" />
+                        {o.pre && <Chip label="Pre-Order" size="small" color="secondary" />}
                         <Chip label={`Created: ${new Date(o.createdAt || o.date || Date.now()).toLocaleString()}`} size="small" />
                       </Stack>
 
                       {/* optional short items preview */}
                       <Box sx={{ mt: 1 }}>
                         <Typography variant="body2" color="text.secondary" noWrap>
-                          {o.items && o.items.length > 0
-                            ? o.items.slice(0, 3).map((it) => `${it.name} x${it.qty || 1}`).join(", ")
-                            : "No items listed"}
+                          {(() => {
+                            const list = o.items || [];
+                            if (!list.length) return "No items listed";
+
+                            const grouped = {};
+                            for (const it of list) {
+                              const label = it.itemname || it.name || it.title || "Item";
+                              const key = it._id || label;
+                              if (!grouped[key]) grouped[key] = { label, qty: 0 };
+                              grouped[key].qty += 1;
+                            }
+
+                            return Object.values(grouped)
+                              .slice(0, 3)
+                              .map((g) => `${g.label} x${g.qty}`)
+                              .join(", ");
+                          })()}
                         </Typography>
                       </Box>
                     </CardContent>
 
-                    <CardActions sx={{ justifyContent: "space-between", px: 2, pb: 2 }}>
-                      <Box>
-                        <Tooltip title="More info">
-                          <IconButton size="small" aria-label="order info">
-                            <InfoOutlinedIcon />
-                          </IconButton>
-                        </Tooltip>
-                      </Box>
+                      <CardActions sx={{ justifyContent: "space-between", px: 2, pb: 2 }}>
+                        <Box>
+                          <Tooltip title="More info">
+                            <IconButton size="small" aria-label="order info">
+                              <InfoOutlinedIcon />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
 
-                      <Stack direction="row" spacing={1}>
-                        <Button
-                          size="small"
-                          color="error"
-                          startIcon={<CancelIcon />}
-                          onClick={() => openCancelDialog(o.orderNumber)}
-                          aria-label={`cancel ${o.orderNumber}`}
-                          disabled={(o.status || "").toLowerCase() === "canceled"}
-                        >
-                          Cancel
-                        </Button>
-                      </Stack>
-                    </CardActions>
-                  </Card>
-                </Grid>
-              ))}
+                        <Stack direction="row" spacing={1}>
+                          {!isCompleted && !isCancelled && (
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              startIcon={<QrCode2Icon />}
+                              onClick={() => openQrDialog(o)}
+                              aria-label={`qr code for ${o.orderNumber}`}
+                              disabled={!o.qrcode}
+                            >
+                              QR Code
+                            </Button>
+                          )}
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<ImageIcon />}
+                            onClick={() => openReceiptDialog(o)}
+                            aria-label={`receipt ${o.orderNumber}`}
+                            disabled={!(o.receiptImageUrl || o.receiptImageurl)}
+                          >
+                            Receipt
+                          </Button>
+                          {!isCompleted && !isCancelled && (
+                            <Button
+                              size="small"
+                              color="error"
+                              startIcon={<CancelIcon />}
+                              onClick={() => openCancelDialog(o.orderNumber)}
+                              aria-label={`cancel ${o.orderNumber}`}
+                            >
+                              Cancel
+                            </Button>
+                          )}
+                        </Stack>
+                      </CardActions>
+                    </Card>
+                  </Grid>
+                );
+              })}
             </Grid>
 
             {/* Pagination */}
             <Box sx={{ display: "flex", justifyContent: "center", mt: 3 }}>
               <Pagination
-                count={Math.ceil(orders.length / PAGE_SIZE)}
+                count={Math.ceil(filteredOrders.length / PAGE_SIZE)}
                 page={page}
                 onChange={(_, p) => setPage(p)}
                 color="primary"
@@ -358,6 +415,41 @@ export default function OrdersDashboard() {
           </>
         )}
       </Box>
+
+      {/* QR Code Dialog */}
+      <Dialog open={qrDialogOpen} onClose={closeQrDialog}>
+        <DialogTitle>Order QR Code</DialogTitle>
+        <DialogContent sx={{ display: "flex", justifyContent: "center", alignItems: "center", minWidth: 280 }}>
+          {qrData ? (
+            <Box
+              component="img"
+              src={qrData.startsWith("data:") ? qrData : `data:image/png;base64,${qrData}`}
+              alt="Order QR Code"
+              sx={{ width: "100%", maxWidth: 320, borderRadius: 1 }}
+            />
+          ) : (
+            <Typography variant="body2">QR code not available.</Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeQrDialog}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Receipt Dialog */}
+      <Dialog open={receiptDialogOpen} onClose={() => setReceiptDialogOpen(false)}>
+        <DialogTitle>Order Receipt</DialogTitle>
+        <DialogContent sx={{ display: "flex", justifyContent: "center", alignItems: "center", minWidth: 320 }}>
+          {receiptUrl ? (
+            <Box component="img" src={receiptUrl} alt="Order receipt" sx={{ width: "100%", borderRadius: 1 }} />
+          ) : (
+            <Typography variant="body2">Receipt image not available.</Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setReceiptDialogOpen(false)}>Close</Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Cancel Confirmation Dialog */}
       <Dialog open={confirmOpen} onClose={closeCancelDialog}>

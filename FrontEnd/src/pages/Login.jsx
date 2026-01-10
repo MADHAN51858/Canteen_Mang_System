@@ -2,6 +2,7 @@ import { useState, useContext } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { post } from "../utils/api";
 import { CartContext } from "../context/CartContext";
+import { useToast } from "../hooks/useToast";
 
 import {
   Box,
@@ -17,26 +18,34 @@ import LockIcon from "@mui/icons-material/Lock";
 export default function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [msg, setMsg] = useState("");
   const navigate = useNavigate();
   const { login } = useContext(CartContext);
+  const { showToast } = useToast();
 
   async function handleLogin() {
     // setLoading(true);
-    setMsg("");
     try {
       const res = await post("/users/login", { username, password });
+      console.log("Login response:", res);
       if (res?.success && res?.data?.user) {
         const user = res.data.user;
+        console.log("User logged in:", user);
         login(user);
         const rollValue = String(user.role || "").toLowerCase();
-        if (rollValue.includes("admin")) navigate("/admin");
-        else navigate("/student/menu");
+        console.log("User role:", rollValue);
+        if (rollValue === "admin" || rollValue === "staff") {
+          navigate("/admin/menu");
+        } else {
+          navigate("/student/menu");
+        }
       } else {
-        setMsg(res.message || "Login failed");
+        const errorMsg = res.message || "Login failed";
+        showToast(errorMsg, "error");
+        console.error("Login failed:", res);
       }
     } catch (e) {
-      setMsg("Login failed. Please try again.");
+      console.error("Login error:", e);
+      showToast("Login failed. Please try again.", "error");
     } finally {
       // setLoading(false);
     }
@@ -96,12 +105,6 @@ export default function Login() {
             ),
           }}
         />
-
-        {msg && (
-          <Typography color="error" fontSize={14} mt={1}>
-            {msg}
-          </Typography>
-        )}
 
         <Button
           variant="contained"

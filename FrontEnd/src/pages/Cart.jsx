@@ -1,6 +1,6 @@
 import { useContext, useState } from "react";
 import { CartContext } from "../context/CartContext";
-import { placeOrder } from "../utils/api";
+import { placeOrder, post } from "../utils/api";
 
 import {
   Box,
@@ -17,64 +17,127 @@ import {
   Stack,
   Alert,
   CircularProgress,
+  Switch,
+  FormControlLabel,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  Radio,
+  RadioGroup,
+  FormControl,
+  FormLabel,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import ShoppingBagIcon from "@mui/icons-material/ShoppingBag";
 
-export default function Cart() {
-  const { cart, removeFromCart, clearCart, user } = useContext(CartContext);
-  const [name, setName] = useState("");
-  const [msg, setMsg] = useState("");
-  const [loading, setLoading] = useState(false);
-
-  const total = cart.reduce((s, i) => s + (i.price || 0), 0);
-
-  async function openRazorpay(amount) {
-    // Step 1: get order from backend
-    const res = await fetch("http://localhost:3000/create-order", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount }),
+export async function openRazorpay(amount) {
+  // Load Razorpay script if not loaded
+  if (!window.Razorpay) {
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    document.body.appendChild(script);
+    await new Promise((resolve) => {
+      script.onload = resolve;
     });
+  }
 
-    const order = await res.json();
-
-    // Step 2: open Razorpay checkout popup
+  // Step 2: open Razorpay checkout popup (dummy gateway - no order_id)
+  return new Promise((resolve, reject) => {
     const options = {
-      key: "rzp_test_RgiPSqw18Sa2P8", // your key
-      amount: order.amount,
+      key: "rzp_test_RgiPSqw18Sa2P8",
+      amount: amount * 100, // Convert to paise
       currency: "INR",
       name: "Food Ordering App",
       description: "Order Payment",
-      order_id: order.id,
+      // NO order_id for dummy gateway
 
       handler: function (response) {
-        alert("Payment Successful!");
-
         console.log(response);
+        resolve(response);
       },
 
       theme: {
         color: "#F37254",
       },
+      modal: {
+        ondismiss: function () {
+          resolve(); // Allow order to proceed even if dismissed
+        },
+      },
     };
 
-    const rzp = new Razorpay(options);
+    const rzp = new window.Razorpay(options);
+    rzp.on("payment.failed", function (err) {
+      console.warn("Razorpay payment failed:", err);
+      resolve(); // Allow order to proceed even on failure
+    });
     rzp.open();
+  });
+}
+
+export default function Cart() {
+  const { cart, removeFromCart, clearCart, user, increaseQuantity, decreaseQuantity, login } = useContext(CartContext);
+  const [msg, setMsg] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [isPre, setIsPre] = useState(false);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState("wallet");
+
+  const total = cart.reduce((s, i) => s + (i.price || 0) * (i.quantity || 1), 0);
+  const walletBalance = Number(user?.walletBalance || 0);
+
+  function handlePlaceOrderClick() {
+    if (!user) return setMsg("Please login to place order");
+    if (cart.length === 0) return setMsg("Cart is empty");
+    setPaymentDialogOpen(true);
   }
 
-  async function handlePlaceOrder(total) {
-    if (!name) return setMsg("Please provide username or rollNo");
+  async function confirmPayment() {
+    setPaymentDialogOpen(false);
     setLoading(true);
-    const userOrder = cart.map((i) => i.itemname);
-    try {
-       await openRazorpay(total);
+    const userOrder = cart.flatMap((i) => 
+      Array((i.quantity || 1)).fill(i.itemname)
+    );
 
-         await placeOrder(name, userOrder ,user.username);
+    try {
+      if (paymentMethod === "wallet") {
+        // Check wallet balance
+        if (walletBalance < total) {
+          setMsg(`Insufficient wallet balance. Available: ₹${walletBalance}, Required: ₹${total}`);
+          setLoading(false);
+          return;
+        }
+
+        // Deduct from wallet
+        const deductRes = await post("/users/deductFromWallet", { amount: total });
+        if (!deductRes || !deductRes.success) {
+          setMsg(deductRes?.message || "Failed to deduct from wallet");
+          setLoading(false);
+          return;
+        }
+
+        // Update user context with new balance
+        if (deductRes.data && deductRes.data.newBalance !== undefined) {
+          const updatedUser = { ...user, walletBalance: deductRes.data.newBalance };
+          login(updatedUser);
+        }
+
+        // Place order
+        await placeOrder(userOrder, isPre);
         clearCart();
-        setName("");
+        setIsPre(false);
+        setMsg(`Order placed successfully! ₹${total} deducted from wallet.`);
+      } else {
+        // Razorpay payment
+        await openRazorpay(total);
+        await placeOrder(userOrder, isPre);
+        clearCart();
+        setIsPre(false);
+        setMsg("Order placed successfully!");
+      }
     } catch (err) {
-      setMsg("Failed to place order");
+      setMsg(err?.message || "Failed to place order");
     } finally {
       setLoading(false);
     }
@@ -124,15 +187,34 @@ export default function Cart() {
 
           <Divider sx={{ mb: 3 }} />
 
-          {/* User Input */}
-          <TextField
-            fullWidth
-            label="Username or Roll No"
-            variant="outlined"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
+          {/* Show logged-in user */}
+          {user && (
+            <Box sx={{ mb: 2, p: 2, bgcolor: "action.hover", borderRadius: 2 }}>
+              <Typography variant="body2" color="text.secondary">
+                Ordering as:
+              </Typography>
+              <Typography variant="body1" fontWeight={600}>
+                {user.username}
+              </Typography>
+            </Box>
+          )}
+
+          {/* Pre-order Switch */}
+          <FormControlLabel
+            control={
+              <Switch
+                checked={isPre}
+                onChange={(e) => setIsPre(e.target.checked)}
+                disabled={cart.length === 0}
+                color="primary"
+              />
+            }
+            label={
+              <Typography variant="body1" fontWeight={500}>
+                Pre-order
+              </Typography>
+            }
             sx={{ mb: 3 }}
-            disabled={cart.length === 0}
           />
 
           {/* Cart Items */}
@@ -168,7 +250,7 @@ export default function Cart() {
               >
                 <List sx={{ p: 0 }}>
                   {cart.map((i, idx) => (
-                    <Box key={`${i._id || 'item'}-${idx}`}>
+                    <Box key={`${i._id || "item"}-${idx}`}>
                       <ListItem
                         secondaryAction={
                           <IconButton
@@ -197,14 +279,43 @@ export default function Cart() {
                             </Typography>
                           }
                           secondary={
-                            <Typography
-                              variant="body2"
-                              color="success.main"
-                              sx={{ fontWeight: 600, mt: 0.5 }}
-                            >
-                              ₹{i.price}
-                            </Typography>
+                            <Box component="div" sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 1 }}>
+                              <Box component="span" sx={{ color: 'success.main', fontWeight: 600, fontSize: '0.875rem' }}>
+                                ₹{i.price} × {i.quantity || 1} = ₹{(i.price || 0) * (i.quantity || 1)}
+                              </Box>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => decreaseQuantity(i._id)}
+                                  sx={{ 
+                                    bgcolor: 'action.hover',
+                                    '&:hover': { bgcolor: 'action.selected' },
+                                    width: 28,
+                                    height: 28
+                                  }}
+                                >
+                                  <Box component="span" sx={{ fontSize: '1.2rem', fontWeight: 700 }}>−</Box>
+                                </IconButton>
+                                <Box component="span" sx={{ minWidth: 20, textAlign: 'center', fontWeight: 600 }}>
+                                  {i.quantity || 1}
+                                </Box>
+                                <IconButton
+                                  size="small"
+                                  onClick={() => increaseQuantity(i._id)}
+                                  sx={{ 
+                                    bgcolor: 'action.hover',
+                                    '&:hover': { bgcolor: 'action.selected' },
+                                    width: 28,
+                                    height: 28
+                                  }}
+                                  disabled={(i.quantity || 1) >= Number(i.stock ?? Infinity)}
+                                >
+                                  <Box component="span" sx={{ fontSize: '1.2rem', fontWeight: 700 }}>+</Box>
+                                </IconButton>
+                              </Box>
+                            </Box>
                           }
+                          secondaryTypographyProps={{ component: 'div' }}
                         />
                       </ListItem>
                       {idx < cart.length - 1 && <Divider />}
@@ -260,8 +371,7 @@ export default function Cart() {
               fullWidth
               size="large"
               disabled={cart.length === 0 || loading}
-              // onClick={handlePlaceOrder}
-              onClick={() => handlePlaceOrder(total)}
+              onClick={handlePlaceOrderClick}
               sx={{
                 py: 1.2,
                 fontWeight: 700,
@@ -301,6 +411,100 @@ export default function Cart() {
           </Stack>
         </Paper>
       </Container>
+
+      {/* Payment Method Dialog */}
+      <Dialog open={paymentDialogOpen} onClose={() => !loading && setPaymentDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Select Payment Method</DialogTitle>
+        <DialogContent>
+          <FormControl component="fieldset" fullWidth sx={{ mt: 1 }}>
+            <RadioGroup value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  p: 1.5,
+                  mb: 1,
+                  border: "1px solid",
+                  borderColor: paymentMethod === "wallet" ? "primary.main" : "divider",
+                  borderRadius: 2,
+                  bgcolor: paymentMethod === "wallet" ? "action.hover" : "transparent",
+                  cursor: "pointer",
+                }}
+                onClick={() => setPaymentMethod("wallet")}
+              >
+                <Box sx={{ display: "flex", alignItems: "center" }}>
+                  <Radio value="wallet" />
+                  <Box>
+                    <Typography variant="body1" fontWeight={600}>
+                      Wallet
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Balance: ₹{walletBalance.toFixed(2)}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  p: 1.5,
+                  border: "1px solid",
+                  borderColor: paymentMethod === "razorpay" ? "primary.main" : "divider",
+                  borderRadius: 2,
+                  bgcolor: paymentMethod === "razorpay" ? "action.hover" : "transparent",
+                  cursor: "pointer",
+                }}
+                onClick={() => setPaymentMethod("razorpay")}
+              >
+                <Box sx={{ display: "flex", alignItems: "center" }}>
+                  <Radio value="razorpay" />
+                  <Box>
+                    <Typography variant="body1" fontWeight={600}>
+                      Razorpay
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Pay with card/UPI/netbanking
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+            </RadioGroup>
+          </FormControl>
+
+          {paymentMethod === "wallet" && walletBalance < total && (
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              Insufficient balance. Add ₹{(total - walletBalance).toFixed(2)} more to your wallet.
+            </Alert>
+          )}
+
+          <Box sx={{ mt: 2, p: 2, bgcolor: "action.hover", borderRadius: 2 }}>
+            <Stack direction="row" justifyContent="space-between">
+              <Typography variant="body2" fontWeight={600}>
+                Order Total:
+              </Typography>
+              <Typography variant="body2" fontWeight={700}>
+                ₹{total}
+              </Typography>
+            </Stack>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setPaymentDialogOpen(false)} disabled={loading}>
+            Cancel
+          </Button>
+          <Button 
+            variant="contained" 
+            onClick={confirmPayment} 
+            disabled={loading || (paymentMethod === "wallet" && walletBalance < total)}
+          >
+            {loading ? "Processing..." : "Confirm Payment"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

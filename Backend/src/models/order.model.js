@@ -28,7 +28,7 @@ const orderSchema = new Schema(
     },
     status: {
       type: String,
-      enum: ["pending", "preparing", "delivered", "cancelled"],
+      enum: ["pending", "preparing", "cancelled", "completed"],
       default: "pending",
     },
     razorpayOrderId: {
@@ -39,7 +39,7 @@ const orderSchema = new Schema(
       type: String,
       required: false,
     },
-      //status pending is recommended by the razorpay only because, when user pays the amount, the razorpay is
+    //status pending is recommended by the razorpay only because, when user pays the amount, the razorpay is
     //going to return an order and payment id in the api response, and we have to use this to query the razorpay database to make sure that the payment
     //is completed, then only we amke the status to completed or failed
     paymentStatus: {
@@ -56,7 +56,24 @@ const orderSchema = new Schema(
       required: true,
     },
 
+    pre: {
+      type: Boolean,
+      default: false,
+    },
+    qrcode: {
+      type: String,
+    },
+    receiptImageUrl: {
+      type: String,
+    },
+    receiptImageUrlNoBarcode: {
+      type: String,
+    },
   
+    scanCount: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true }
 );

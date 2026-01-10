@@ -1,7 +1,9 @@
 // Register.jsx
-import { useState } from "react";
+import { useState, useContext } from "react";
 import { useNavigate, Link as RouterLink } from "react-router-dom";
 import { post } from "../utils/api";
+import { CartContext } from "../context/CartContext";
+import { useToast } from "../hooks/useToast";
 import {
   Box,
   Paper,
@@ -26,26 +28,36 @@ export default function Register() {
     username: "",
     email: "",
     password: "",
-    role: "",
     rollNo: "",
     phoneNo: "",
   });
 
-  const [msg, setMsg] = useState({ text: "", type: "" });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { login } = useContext(CartContext);
+  const { showToast } = useToast();
 
   async function handleRegister() {
     setLoading(true);
     try {
-      const res = await post("/users/register", form);
-      setMsg({ text: res.message || "Registered successfully!", type: res.success ? "success" : "error" });
+      const { role, ...payload } = form;
+      const res = await post("/users/register", payload);
 
       if (res.success) {
-        setTimeout(() => navigate("/login"), 1500);
+        const userData = res.data || {};
+        showToast("Registered successfully!", "success");
+        // store user so headers know which one to render
+        login(userData);
+        const role = String(userData.role || "student").toLowerCase();
+        const target = role === "admin" ? "/admin/menu" : "/student/menu";
+        navigate(target);
+      } else {
+        // Extract clean error message from response
+        const errorMsg = res.message || "Registration failed. Please try again.";
+        showToast(errorMsg, "error");
       }
     } catch (e) {
-      setMsg({ text: "Registration failed. Please try again.", type: "error" });
+      showToast("Registration failed. Please try again.", "error");
     } finally {
       setLoading(false);
     }
@@ -166,28 +178,8 @@ export default function Register() {
 
             <Divider sx={{ my: 1 }} />
 
-            {/* Roll and Roll No */}
+            {/* Roll No */}
             <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-              <TextField
-                label="Role"
-                value={form.role}
-                onChange={(e) => handleChange("role", e.target.value)}
-                fullWidth
-                variant="outlined"
-                size="small"
-                select
-                SelectProps={{ native: true }}
-                sx={{
-                  "& .MuiOutlinedInput-root": {
-                    borderRadius: 2,
-                  },
-                }}
-              >
-                <option value="">Select Role</option>
-                <option value="student">Student</option>
-                <option value="admin">Admin</option>
-              </TextField>
-
               <TextField
                 label="Roll No / ID"
                 value={form.rollNo}
@@ -231,19 +223,6 @@ export default function Register() {
                 },
               }}
             />
-
-            {/* Alert */}
-            {msg.text && (
-              <Alert
-                severity={msg.type}
-                sx={{
-                  borderRadius: 2,
-                  animation: "slideIn 0.3s ease",
-                }}
-              >
-                {msg.text}
-              </Alert>
-            )}
 
             {/* Register Button */}
             <Button
