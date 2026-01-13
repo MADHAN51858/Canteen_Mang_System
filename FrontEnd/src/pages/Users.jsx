@@ -149,13 +149,6 @@ export default function Users() {
                     {updatingId === user._id ? "Updating..." : "Set Staff"}
                   </button>
                   <button
-                    className="promote-btn"
-                    onClick={() => handleUpdateRole(user._id, user.username, "admin")}
-                    disabled={updatingId === user._id || user.role === "admin"}
-                  >
-                    {updatingId === user._id ? "Updating..." : "Set Admin"}
-                  </button>
-                  <button
                     className={user.blocked ? "unblock-btn" : "block-btn"}
                     onClick={() => handleToggleBlock(user._id)}
                     disabled={updatingId === user._id}

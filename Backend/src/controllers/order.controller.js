@@ -312,7 +312,6 @@ const markPreparing = asyncHandler(async (req, res) => {
 const markCompleteByBarcode = asyncHandler(async (req, res) => {
   const { barcode } = req.body;
 
-  console.log("markCompleteByBarcode called with barcode:", barcode);
 
   if (!barcode) {
     throw new ApiError(400, "Barcode is required");
@@ -330,7 +329,6 @@ const markCompleteByBarcode = asyncHandler(async (req, res) => {
 
   // Normalize barcode for case-insensitive matching
   const normalizedBarcode = String(barcode).trim().toLowerCase();
-  console.log("Normalized barcode:", normalizedBarcode);
 
   try {
     // Atomically mark as completed if not already completed to avoid double credit
@@ -351,7 +349,6 @@ const markCompleteByBarcode = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, existing, "Order already completed"));
     }
 
-    console.log("Updated order status to:", updatedOrder.status);
 
     // Credit wallet balance based on order total (only when just completed)
     const creditAmount = Number(updatedOrder.totalprice ?? updatedOrder.amount ?? 0);
@@ -367,7 +364,6 @@ const markCompleteByBarcode = asyncHandler(async (req, res) => {
       .status(200)
       .json(new ApiResponse(200, updatedOrder, "Order marked as completed and wallet credited"));
   } catch (err) {
-    console.error("Error in markCompleteByBarcode:", err);
     if (err instanceof ApiError) {
       throw err;
     }

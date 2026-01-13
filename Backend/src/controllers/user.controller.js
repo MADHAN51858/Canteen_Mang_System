@@ -5,6 +5,7 @@ import { Food } from "../models/food.model.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { createOrder } from "./order.controller.js";
 import { Order } from "../models/order.model.js";
+import { deleteFromCloudinaryByUrl } from "../utils/cloudinary.js";
 
 const generateAccesTokenandRefreshToken = async (userId) => {
   try {
@@ -445,7 +446,45 @@ const cancelOrder = asyncHandler(async (req, res) => {
 
   // Mark order as cancelled instead of deleting it
   order.status = "cancelled";
+
+  // Clean up barcode receipt (Cloudinary) and clear QR code
+  if (order.receiptImageUrl) {
+    await deleteFromCloudinaryByUrl(order.receiptImageUrl);
+    order.receiptImageUrl = "";
+  }
+
+  // Clear QR; if stored as Cloudinary URL, delete it
+  const qrVal = order.qrcode;
+  const isQrCloudinary = typeof qrVal === "string" && qrVal.startsWith("http") && qrVal.includes("res.cloudinary.com");
+  if (isQrCloudinary) {
+    await deleteFromCloudinaryByUrl(qrVal);
+  }
+  order.qrcode = "";
+
   await order.save();
+
+  // Refund the full order amount to the user and deduct from admins' wallets
+  const refundAmount = Number(order.totalprice ?? order.amount ?? 0);
+  if (!Number.isNaN(refundAmount) && refundAmount > 0) {
+    // Credit ordering user's wallet
+    const owner = await User.findOne({ username: order.orderedBy });
+    if (owner) {
+      owner.walletBalance = Number(owner.walletBalance || 0) + refundAmount;
+      await owner.save({ validateBeforeSave: false });
+    }
+
+    // Deduct evenly from all admins' wallets
+    const admins = await User.find({ role: "admin" });
+    if (admins && admins.length > 0) {
+      const share = refundAmount / admins.length;
+      await Promise.all(
+        admins.map((admin) => {
+          admin.walletBalance = Number(admin.walletBalance || 0) - share;
+          return admin.save({ validateBeforeSave: false });
+        })
+      );
+    }
+  }
 
   return res
     .status(200)

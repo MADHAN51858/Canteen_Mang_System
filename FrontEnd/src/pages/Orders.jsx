@@ -1,5 +1,5 @@
 // OrdersAdmin.jsx
-import React, { useState, useEffect, useCallback , useContext } from "react";
+import { useState, useEffect, useCallback , useContext } from "react";
 import { CartContext } from "../context/CartContext";
 import {
   Box,
@@ -25,7 +25,6 @@ import {
 } from "@mui/material";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import CancelIcon from "@mui/icons-material/Cancel";
-import SearchIcon from "@mui/icons-material/Search";
 import ImageIcon from "@mui/icons-material/Image";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import { DataGrid, GridActionsCellItem } from "@mui/x-data-grid";
@@ -81,15 +80,18 @@ export default function OrdersAdmin() {
   const [snack, setSnack] = useState({ open: false, severity: "info", message: "" });
   const [pageSize, setPageSize] = useState(10);
   const [scannerActive, setScannerActive] = useState(true);
-  const [lastScannedBarcode, setLastScannedBarcode] = useState("");
-  const [testBarcode, setTestBarcode] = useState("");
   const { user } = useContext(CartContext);
   const [activeTab, setActiveTab] = useState("pre");
 
   const filterRowsByTab = useCallback(
     (list, tab) => list.filter((order) => {
-      if (tab === "pre") return order.pre === true;
-      if (tab === "normal") return order.status === "cancelled";
+      const status = String(order.status || "").toLowerCase();
+      const isCancelled = status === "cancelled" || status === "canceled";
+      const isCompleted = status === "completed";
+
+      if (tab === "pre") return order.pre === true && !isCancelled && !isCompleted; // pre-orders, exclude cancelled and completed
+      if (tab === "normal") return isCancelled && order.pre === true; // only cancelled pre-orders
+      if (tab === "completed") return isCompleted && order.pre === true; // only completed pre-orders
       return true;
     }),
     []
@@ -136,14 +138,13 @@ export default function OrdersAdmin() {
   }, [fetchOrders]);
 
   // Handle barcode processing
-  const processBarcode = async (barcode) => {
+  const processBarcode = useCallback(async (barcode) => {
     if (!barcode.trim()) {
       setSnack({ open: true, severity: "warning", message: "Empty barcode received" });
       return;
     }
 
     console.log("Processing barcode:", barcode);
-    setLastScannedBarcode(barcode);
 
     try {
       const res = await post("/order/markCompleteByBarcode", { barcode });
@@ -166,12 +167,14 @@ export default function OrdersAdmin() {
           activeTab
         ));
         setSnack({ open: true, severity: "success", message: `Order ${updatedOrderNumber} marked as completed` });
+      } else {
+        setSnack({ open: true, severity: "warning", message: res?.message || "Barcode not found" });
       }
     } catch (err) {
       console.error("Barcode processing error:", err);
       setSnack({ open: true, severity: "error", message: `Failed: ${err?.message || "Unknown error"}` });
     }
-  };
+  }, [filterRowsByTab, activeTab]);
 
   // Barcode scanner useEffect
   useEffect(() => {
@@ -180,7 +183,7 @@ export default function OrdersAdmin() {
     });
 
     return cleanup;
-  }, []);
+  }, [processBarcode]);
 
   // Cancel flow: ask user id then cancel
   const handleConfirmCancel = async () => {
@@ -229,6 +232,7 @@ export default function OrdersAdmin() {
     } catch (err) {
       setSnack({ open: true, severity: "error", message: err?.message || "Failed to accept order" });
     } finally {
+
       setLoading(false);
     }
   };
@@ -340,6 +344,7 @@ export default function OrdersAdmin() {
           >
             <Tab value="pre" label="Pre-orders" sx={{ minHeight: 36, height: 36 }} />
             <Tab value="normal" label="Cancelled orders" sx={{ minHeight: 36, height: 36 }} />
+            <Tab value="completed" label="Completed orders" sx={{ minHeight: 36, height: 36 }} />
           </Tabs>
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

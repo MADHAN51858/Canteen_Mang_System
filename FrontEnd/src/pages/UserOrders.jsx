@@ -141,12 +141,15 @@ export default function OrdersDashboard() {
   }
 
   function openReceiptDialog(order) {
-    const status = (order.status || "").toLowerCase();
-    const isCancelled = status === "cancelled";
-    // Use receipt without barcode for cancelled orders
-    const url = isCancelled 
-      ? (order?.receiptImageUrlNoBarcode || order?.receiptImageUrl || order?.receiptImageurl || "")
-      : (order?.receiptImageUrl || order?.receiptImageurl || "");
+    const status = (order?.status || "").toLowerCase();
+    // For pending or preparing orders, show receipt WITH barcode; otherwise show no-barcode receipt
+    let url = "";
+    if (status === "pending" || status === "preparing") {
+      url = order?.receiptImageUrl || order?.receiptImageurl || order?.receiptImageUrlNoBarcode || "";
+    } else {
+      url = order?.receiptImageUrlNoBarcode || order?.receiptImageUrl || order?.receiptImageurl || "";
+    }
+    
     if (url) {
       setReceiptUrl(url);
       setReceiptDialogOpen(true);
@@ -379,7 +382,7 @@ export default function OrdersDashboard() {
                             startIcon={<ImageIcon />}
                             onClick={() => openReceiptDialog(o)}
                             aria-label={`receipt ${o.orderNumber}`}
-                            disabled={!(o.receiptImageUrl || o.receiptImageurl)}
+                            disabled={!(o.receiptImageUrlNoBarcode || o.receiptImageUrl || o.receiptImageurl)}
                           >
                             Receipt
                           </Button>
