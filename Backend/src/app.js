@@ -1,5 +1,4 @@
 import express from "express"
-import Razorpay from "razorpay"
 import cors from "cors"
 import cookieParser from "cookie-parser"
 import dotenv from "dotenv";
@@ -9,13 +8,15 @@ const app = express()
 
 app.use(cors({
   origin: [
-    process.env.CORS_ORIGIN,
-    "http://localhost:5173",
-    "http://localhost:5174"
+    // process.env.CORS_ORIGIN,
+    "https://canteen-mang-system-1.onrender.com",
+    "http://localhost:5173"
   ].filter(Boolean),
   methods: ["GET", "POST", "PUT", "DELETE"],
+   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
 }))
+app.options("*", cors());
 
 app.use(express.json({limit: "16kb"}))
 app.use(express.urlencoded({extended: true, limit: "16kb"}))
