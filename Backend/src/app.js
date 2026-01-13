@@ -16,7 +16,7 @@ app.use(cors({
    allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
 }))
-app.options("*", cors());
+app.options("/*", cors());
 
 app.use(express.json({limit: "16kb"}))
 app.use(express.urlencoded({extended: true, limit: "16kb"}))
