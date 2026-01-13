@@ -45,7 +45,7 @@ export default function Header() {
     { label: "Menu", to: "/student/menu" },
     { label: "Cart", to: "/student/cart", cartCount: cart.length },
     { label: "Orders", to: "/student/orders" },
-    { label: "Wallet", to: "/student/wallet" },
+    // { label: "Wallet", to: "/student/wallet" },
     { label: "Profile", to: "/student/profile" },
   ];
 
