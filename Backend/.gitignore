@@ -31,10 +31,6 @@ Thumbs.db
 logs/
 *.log
 
-# Temporary
-tmp/
-temp/
-
 # Uploaded images (if any temp storage used locally)
 public/uploads/
 
