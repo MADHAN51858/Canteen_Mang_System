@@ -1,4 +1,10 @@
+import axios from 'axios';
+
 const BASE = "https://canteen-mang-system.onrender.com" || 'http://localhost:3000'
+
+// Configure axios with credentials
+axios.defaults.withCredentials = true;
+axios.defaults.baseURL = BASE;
 
 // Callback for handling 401 unauthorized responses
 let onUnauthorized = null;
@@ -94,70 +100,47 @@ function extractErrorMessage(text) {
 }
 
 async function post(path, body){
-  const res = await fetch(`${BASE}${path}`,{
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: JSON.stringify(body)
-  })
-  const contentType = res.headers.get('content-type') || ''
-  const isJson = contentType.includes('application/json')
-  
-  // Handle 401 Unauthorized
-  if (res.status === 401) {
-    if (onUnauthorized) {
-      onUnauthorized();
+  try {
+    const res = await axios.post(path, body, { withCredentials: true });
+    return res.data;
+  } catch (error) {
+    if (error.response?.status === 401) {
+      if (onUnauthorized) {
+        onUnauthorized();
+      }
+      return { success: false, status: 401, message: "Session expired. Please login again." }
     }
-    return { success: false, status: 401, message: "Session expired. Please login again." }
-  }
-  
-  if (!res.ok) {
-    // try to parse json error body, otherwise return text
-    if (isJson) {
-      const j = await res.json()
-      return { success: false, status: res.status, ...j }
+    
+    if (error.response?.data) {
+      return { success: false, status: error.response.status, ...error.response.data }
     }
-    const txt = await res.text()
-    const cleanMessage = extractErrorMessage(txt)
-    return { success: false, status: res.status, message: cleanMessage }
+    
+    const cleanMessage = error.message || "An error occurred. Please try again.";
+    return { success: false, status: error.response?.status || 500, message: cleanMessage }
   }
-
-  if (isJson) return res.json()
-  return { success: true, data: null }
 }
 
 
 
 async function postForm(path, formData){
-  const res = await fetch(`${BASE}${path}`,{
-    method: 'POST',
-    // NOTE: do NOT set Content-Type when sending FormData; the browser will set the multipart boundary
-    credentials: 'include',
-    body: formData,
-  })
-  const contentType = res.headers.get('content-type') || ''
-  const isJson = contentType.includes('application/json')
-  
-  // Handle 401 Unauthorized
-  if (res.status === 401) {
-    if (onUnauthorized) {
-      onUnauthorized();
+  try {
+    const res = await axios.post(path, formData, { withCredentials: true });
+    return res.data;
+  } catch (error) {
+    if (error.response?.status === 401) {
+      if (onUnauthorized) {
+        onUnauthorized();
+      }
+      return { success: false, status: 401, message: "Session expired. Please login again." }
     }
-    return { success: false, status: 401, message: "Session expired. Please login again." }
-  }
-  
-  if (!res.ok) {
-    if (isJson) {
-      const j = await res.json()
-      return { success: false, status: res.status, ...j }
+    
+    if (error.response?.data) {
+      return { success: false, status: error.response.status, ...error.response.data }
     }
-    const txt = await res.text()
-    const cleanMessage = extractErrorMessage(txt)
-    return { success: false, status: res.status, message: cleanMessage }
+    
+    const cleanMessage = error.message || "An error occurred. Please try again.";
+    return { success: false, status: error.response?.status || 500, message: cleanMessage }
   }
-
-  if (isJson) return res.json()
-  return { success: true, data: null }
 }
 
 export async function getCategoryItems(category){
