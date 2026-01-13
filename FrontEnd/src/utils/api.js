@@ -1,4 +1,4 @@
-const BASE = import.meta.env.VITE_API_BASE || 'http://localhost:3000'
+const BASE = "https://canteen-mang-system.onrender.com" || 'http://localhost:3000'
 
 // Callback for handling 401 unauthorized responses
 let onUnauthorized = null;
