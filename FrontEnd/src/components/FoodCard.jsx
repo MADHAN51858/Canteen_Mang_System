@@ -68,6 +68,10 @@ import {
   Stack,
   Tooltip,
   TextField,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from "@mui/material";
 import AddShoppingCartIcon from "@mui/icons-material/AddShoppingCart";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -91,6 +95,9 @@ export default function FoodCard({ item, onAdd, onRemove, onUpdate }) {
   const [preview, setPreview] = useState(item.image || null);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState("");
+  const [secretDialog, setSecretDialog] = useState(false);
+  const [secretInput, setSecretInput] = useState("");
+  const [pendingDelete, setPendingDelete] = useState(null);
 
   async function updateItem() {
     setLoading(true);
@@ -117,6 +124,23 @@ export default function FoodCard({ item, onAdd, onRemove, onUpdate }) {
       setMsg("Failed to Update Item");
     } finally {
       setLoading(false);
+    }
+  }
+
+  function openSecretDialog(itemname) {
+    setPendingDelete(itemname);
+    setSecretInput("");
+    setSecretDialog(true);
+  }
+
+  async function confirmSecretCode() {
+    if (secretInput === "madhu") {
+      setSecretDialog(false);
+      setSecretInput("");
+      await removeMenuItem(pendingDelete);
+      setPendingDelete(null);
+    } else {
+      setSecretInput("");
     }
   }
 
@@ -318,7 +342,7 @@ export default function FoodCard({ item, onAdd, onRemove, onUpdate }) {
                       variant="outlined"
                       color="error"
                       size="small"
-                      onClick={() => removeMenuItem(item.itemname)}
+                      onClick={() => openSecretDialog(item.itemname)}
                       startIcon={<DeleteIcon />}
                       sx={{
                         fontWeight: 700,
@@ -475,6 +499,31 @@ export default function FoodCard({ item, onAdd, onRemove, onUpdate }) {
           )}
         </Stack>
       </Box>
+
+      {/* Secret Code Dialog */}
+      <Dialog open={secretDialog} onClose={() => setSecretDialog(false)}>
+        <DialogTitle sx={{ fontWeight: 700 }}>Enter Secret Code</DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <TextField
+            autoFocus
+            fullWidth
+            type="password"
+            label="Secret Code"
+            value={secretInput}
+            onChange={(e) => setSecretInput(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === "Enter") confirmSecretCode();
+            }}
+            placeholder="Enter code to confirm deletion"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSecretDialog(false)}>Cancel</Button>
+          <Button variant="contained" color="error" onClick={confirmSecretCode}>
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Card>
   );
 }

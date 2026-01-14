@@ -15,6 +15,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  TextField,
 } from "@mui/material";
 import DeleteIcon from "@mui/icons-material/Delete";
 import BlockIcon from "@mui/icons-material/Block";
@@ -34,6 +35,10 @@ export default function Users() {
     userId: null,
     username: "",
   });
+  const [secretDialog, setSecretDialog] = useState(false);
+  const [secretInput, setSecretInput] = useState("");
+  const [secretAction, setSecretAction] = useState(null); // "delete" or "block"
+  const [pendingUserId, setPendingUserId] = useState(null);
   const { showToast } = useToast();
 
   useEffect(() => {
@@ -89,13 +94,20 @@ export default function Users() {
   };
 
   const handleToggleBlock = async (userId) => {
+    setSecretDialog(true);
+    setSecretInput("");
+    setSecretAction("block");
+    setPendingUserId(userId);
+  };
+
+  const performBlock = async () => {
     try {
-      setUpdatingId(userId);
-      const response = await post("/users/toggleBlockUser", { userId });
+      setUpdatingId(pendingUserId);
+      const response = await post("/users/toggleBlockUser", { userId: pendingUserId });
 
       if (response.success) {
         const updated = response.data;
-        setUsers((prev) => prev.map((u) => (u._id === userId ? updated : u)));
+        setUsers((prev) => prev.map((u) => (u._id === pendingUserId ? updated : u)));
         const status = updated.blocked ? "blocked" : "unblocked";
         showToast(`User ${status} successfully`, "success");
       } else {
@@ -107,6 +119,7 @@ export default function Users() {
       showToast(errorMsg, "error");
     } finally {
       setUpdatingId(null);
+      setPendingUserId(null);
     }
   };
 
@@ -114,7 +127,23 @@ export default function Users() {
     setDeleteDialog({ open: true, userId, username });
   };
 
-  const confirmDelete = async () => {
+  const confirmSecretCode = () => {
+    if (secretInput === "madhu") {
+      setSecretDialog(false);
+      setSecretInput("");
+      
+      if (secretAction === "delete") {
+        performDelete();
+      } else if (secretAction === "block") {
+        performBlock();
+      }
+      setSecretAction(null);
+    } else {
+      setSecretInput("");
+    }
+  };
+
+  const performDelete = async () => {
     const { userId } = deleteDialog;
     setDeleteDialog({ open: false, userId: null, username: "" });
 
@@ -135,6 +164,12 @@ export default function Users() {
     } finally {
       setUpdatingId(null);
     }
+  };
+
+  const confirmDelete = async () => {
+    setSecretDialog(true);
+    setSecretInput("");
+    setSecretAction("delete");
   };
 
   return (
@@ -788,6 +823,31 @@ export default function Users() {
             disabled={updatingId}
           >
             Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Secret Code Dialog */}
+      <Dialog open={secretDialog} onClose={() => setSecretDialog(false)}>
+        <DialogTitle sx={{ fontWeight: 700 }}>Enter Secret Code</DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <TextField
+            autoFocus
+            fullWidth
+            type="password"
+            label="Secret Code"
+            value={secretInput}
+            onChange={(e) => setSecretInput(e.target.value)}
+            onKeyPress={(e) => {
+              if (e.key === "Enter") confirmSecretCode();
+            }}
+            placeholder={`Enter code to confirm ${secretAction === "delete" ? "deletion" : "block action"}`}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSecretDialog(false)}>Cancel</Button>
+          <Button variant="contained" color="error" onClick={confirmSecretCode}>
+            {secretAction === "delete" ? "Delete" : "Block"}
           </Button>
         </DialogActions>
       </Dialog>
