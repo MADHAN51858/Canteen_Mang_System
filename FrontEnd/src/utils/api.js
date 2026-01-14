@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-// const BASE = "https://canteen-mang-system.onrender.com"
-const BASE = 'http://localhost:3000' 
+const BASE = "https://canteen-mang-system.onrender.com"
+// const BASE = 'http://localhost:3000' 
 
 // Configure axios with credentials
 axios.defaults.withCredentials = true;
