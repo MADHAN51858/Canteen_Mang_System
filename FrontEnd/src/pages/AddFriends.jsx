@@ -16,7 +16,14 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Container,
+  Paper,
+  Grid,
 } from "@mui/material";
+import PersonIcon from "@mui/icons-material/Person";
+import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
+import EditIcon from "@mui/icons-material/Edit";
+import SaveIcon from "@mui/icons-material/Save";
 
 export default function UserProfile() {
   const { user, login } = useContext(CartContext);
@@ -170,229 +177,512 @@ export default function UserProfile() {
   const walletBalance = Number(user?.walletBalance || 0);
 
   return (
-    <>
-    <Box display="flex" justifyContent="center" sx={{ mt: 4, px: 2 }}>
-      <Card sx={{ width: "100%", maxWidth: 480, boxShadow: 4, borderRadius: 3 }}>
-        <CardContent>
-          <Typography variant="h5" fontWeight={700} gutterBottom>
-            User Profile
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Update your contact details and view wallet balance.
-          </Typography>
+    <Box sx={{ minHeight: "100vh", bgcolor: "#f8fafc" }}>
+      <Container maxWidth="lg" sx={{ pt: 4, pb: 6 }}>
+        {/* Hero Header */}
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          alignItems={{ xs: "flex-start", sm: "center" }}
+          spacing={2}
+          sx={{
+            mb: 4,
+            p: { xs: 2.5, md: 3.5 },
+            background: "linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%)",
+            borderRadius: 3,
+            color: "white",
+            boxShadow: "0 12px 40px rgba(30,64,175,0.25)",
+            position: "relative",
+            overflow: "hidden",
+          }}
+        >
+          {/* Decorative background element */}
+          <Box
+            sx={{
+              position: "absolute",
+              top: -40,
+              right: -40,
+              width: 200,
+              height: 200,
+              borderRadius: "50%",
+              bgcolor: "rgba(255,255,255,0.05)",
+              zIndex: 0,
+            }}
+          />
 
-          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+          <Stack direction="row" alignItems="center" spacing={2} sx={{ zIndex: 1 }}>
+            <Box
+              sx={{
+                width: 64,
+                height: 64,
+                borderRadius: 2,
+                display: "grid",
+                placeItems: "center",
+                bgcolor: "rgba(255,255,255,0.15)",
+                border: "2px solid rgba(255,255,255,0.25)",
+              }}
+            >
+              <PersonIcon sx={{ fontSize: 36, color: "white" }} />
+            </Box>
             <Box>
-              <Typography variant="subtitle2" color="text.secondary">
-                Username
+              <Typography variant="h3" fontWeight={900} sx={{ fontSize: { xs: "1.75rem", sm: "2.5rem" }, color: "white", lineHeight: 1 }}>
+                My Profile
               </Typography>
-              {editMode ? (
-                <TextField
-                  fullWidth
-                  size="small"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  sx={{ mt: 0.5, minWidth: 200 }}
-                />
-              ) : (
-                <Typography variant="h6" fontWeight={700}>
-                  {username || "-"}
-                </Typography>
-              )}
-            </Box>
-            <Box textAlign="right">
-              <Typography variant="subtitle2" color="text.secondary">
-                Wallet Balance
-              </Typography>
-              <Typography variant="h6" fontWeight={800} color="success.main">
-                ₹{walletBalance.toFixed(2)}
+              <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.85)", mt: 0.5 }}>
+                Manage your account & wallet
               </Typography>
             </Box>
           </Stack>
+        </Stack>
 
-          <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mb: 2 }}>
-            {[{
-              label: "Pending",
-              key: "pending",
-              color: "warning.main",
-            }, {
-              label: "Preparing",
-              key: "preparing",
-              color: "info.main",
-            }, {
-              label: "Completed",
-              key: "completed",
-              color: "success.main",
-            }, {
-              label: "Cancelled",
-              key: "cancelled",
-              color: "error.main",
-            }].map((stat) => (
-              <Box
-                key={stat.key}
-                sx={{
-                  flex: 1,
-                  p: 1.5,
-                  borderRadius: 2,
-                  bgcolor: "action.hover",
-                  border: "1px solid",
-                  borderColor: "divider",
-                }}
-              >
-                <Typography variant="subtitle2" color="text.secondary">
-                  {stat.label}
+        <Grid container spacing={3} alignItems="center">
+          {/* Wallet Card */}
+          <Grid item xs={12} sm={6} lg={3}>
+            <Paper
+              elevation={0}
+              sx={{
+                p: 3,
+                borderRadius: 3,
+                background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                color: "white",
+                boxShadow: "0 8px 24px rgba(16,185,129,0.25)",
+                border: "1px solid rgba(255,255,255,0.2)",
+              }}
+            >
+              <Stack spacing={2}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <AccountBalanceWalletIcon sx={{ fontSize: 32 }} />
+                  <Typography variant="h6" fontWeight={700}>
+                    Wallet Balance
+                  </Typography>
+                </Box>
+                <Typography variant="h3" fontWeight={900} sx={{ fontSize: "2.5rem" }}>
+                  ₹{walletBalance.toFixed(2)}
                 </Typography>
-                <Typography variant="h6" fontWeight={800} sx={{ color: stat.color }}>
-                  {ordersLoading ? "-" : orderCounts[stat.key] ?? 0}
-                </Typography>
-              </Box>
-            ))}
-          </Stack>
-
-        
-
-          <Divider sx={{ mb: 2 }} />
-
-          {editMode ? (
-            <>
-              <TextField
-                fullWidth
-                label="Email"
-                value={email}
-                type="email"
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setEmail(v);
-                  setEmailError(validateEmail(v) ? "" : "Enter a valid email");
-                }}
-                error={Boolean(emailError)}
-                helperText={emailError || ""}
-                sx={{ mb: 2 }}
-              />
-
-              <TextField
-                fullWidth
-                label="Phone Number"
-                value={phoneNo}
-                type="tel"
-                inputMode="numeric"
-                onChange={(e) => {
-                  const v = cleanPhoneInput(e.target.value);
-                  setPhoneNo(v);
-                  setPhoneError(v.length === 10 ? "" : "Phone number must be exactly 10 digits");
-                }}
-                error={Boolean(phoneError)}
-                helperText={phoneError || ""}
-                sx={{ mb: 2 }}
-              />
-
-              <TextField
-                fullWidth
-                label="Roll Number"
-                value={rollNo}
-                onChange={(e) => setRollNo(e.target.value)}
-                sx={{ mb: 2 }}
-              />
-
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mt: 2 }}>
                 <Button
                   variant="contained"
-                  onClick={handleSave}
-                  disabled={saving}
-                  sx={{ flex: 1, py: 1.1, textTransform: "none", fontWeight: 700 }}
-                >
-                  {saving ? "Saving..." : "Save Changes"}
-                </Button>
-                <Button
-                  variant="outlined"
-                  onClick={handleReset}
-                  disabled={saving}
-                  sx={{ flex: 1, py: 1.1, textTransform: "none", fontWeight: 700 }}
-                >
-                  Cancel
-                </Button>
-              </Stack>
-            </>
-          ) : (
-            <Stack spacing={1.5} sx={{ mt: 1 }}>
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary">
-                  Email
-                </Typography>
-                <Typography variant="body1" fontWeight={600}>
-                  {email || "-"}
-                </Typography>
-              </Box>
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary">
-                  Phone Number
-                </Typography>
-                <Typography variant="body1" fontWeight={600}>
-                  {phoneNo || "-"}
-                </Typography>
-              </Box>
-              <Box>
-                <Typography variant="subtitle2" color="text.secondary">
-                  Roll Number
-                </Typography>
-                <Typography variant="body1" fontWeight={600}>
-                  {rollNo || "-"}
-                </Typography>
-              </Box>
-
-              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ mt: 1 }}>
-                <Button
-                  variant="contained"
-                  onClick={() => setEditMode(true)}
-                  sx={{ flex: 1, py: 1.1, textTransform: "none", fontWeight: 700 }}
-                >
-                  Edit Profile
-                </Button>
-                <Button
-                  variant="outlined"
                   onClick={() => setAddMoneyOpen(true)}
-                  sx={{ flex: 1, py: 1.1, textTransform: "none", fontWeight: 700 }}
+                  sx={{
+                    bgcolor: "white",
+                    color: "#059669",
+                    fontWeight: 700,
+                    textTransform: "none",
+                    "&:hover": {
+                      bgcolor: "rgba(255,255,255,0.9)",
+                    },
+                  }}
                 >
                   Add Money
                 </Button>
               </Stack>
-            </Stack>
-          )}
+            </Paper>
+          </Grid>
 
-          {msg && (
-            <Alert
-              severity={msg.toLowerCase().includes("fail") ? "error" : "success"}
-              sx={{ mt: 2 }}
+          {/* Profile Details Card */}
+          <Grid item xs={12} sm={6} lg={9}>
+            <Paper
+              elevation={0}
+              sx={{
+                p: 3,
+                borderRadius: 3,
+                background: "white",
+                border: "1px solid #e2e8f0",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+              }}
             >
-              {msg}
-            </Alert>
-          )}
-        </CardContent>
-      </Card>
-    </Box>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
+                <Typography variant="h5" fontWeight={700} sx={{ color: "#1e293b" }}>
+                  Profile Information
+                </Typography>
+                {!editMode && (
+                  <Button
+                    variant="outlined"
+                    startIcon={<EditIcon />}
+                    onClick={() => setEditMode(true)}
+                    sx={{
+                      textTransform: "none",
+                      fontWeight: 600,
+                      borderRadius: 2,
+                    }}
+                  >
+                    Edit
+                  </Button>
+                )}
+              </Stack>
 
-    <Dialog open={addMoneyOpen} onClose={() => setAddMoneyOpen(false)}>
-      <DialogTitle>Add Money to Wallet</DialogTitle>
-      <DialogContent>
-        <TextField
-          autoFocus
-          margin="dense"
-          label="Amount (₹)"
-          type="number"
-          fullWidth
-          value={addAmount}
-          onChange={(e) => setAddAmount(e.target.value)}
-          error={Boolean(addError)}
-          helperText={addError || ""}
-        />
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={() => setAddMoneyOpen(false)} disabled={addSaving}>Cancel</Button>
-        <Button onClick={handleAddMoney} variant="contained" disabled={addSaving}>
-          {addSaving ? "Adding..." : "Add Money"}
-        </Button>
-      </DialogActions>
-    </Dialog>
-    </>
+              {editMode ? (
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 3.5,
+                    borderRadius: 2,
+                    bgcolor: "#f8fafc",
+                    border: "1px solid #e2e8f0",
+                  }}
+                >
+                  <Typography variant="h6" fontWeight={700} sx={{ mb: 3, color: "#1e293b" }}>
+                    Edit Your Profile
+                  </Typography>
+
+                  <Grid container spacing={2.5} sx={{ mb: 3 }}>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        label="Username"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        variant="outlined"
+                        sx={{
+                          "& .MuiOutlinedInput-root": {
+                            borderRadius: 2,
+                            bgcolor: "white",
+                            transition: "all 0.2s ease",
+                            "&:hover fieldset": {
+                              borderColor: "#3b82f6",
+                            },
+                            "&.Mui-focused fieldset": {
+                              borderColor: "#1d4ed8",
+                              borderWidth: 2,
+                            },
+                          },
+                          "& .MuiOutlinedInput-input": {
+                            padding: "12px 14px",
+                            fontWeight: 600,
+                          },
+                        }}
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        label="Roll Number"
+                        value={rollNo}
+                        onChange={(e) => setRollNo(e.target.value)}
+                        variant="outlined"
+                        sx={{
+                          "& .MuiOutlinedInput-root": {
+                            borderRadius: 2,
+                            bgcolor: "white",
+                            transition: "all 0.2s ease",
+                            "&:hover fieldset": {
+                              borderColor: "#3b82f6",
+                            },
+                            "&.Mui-focused fieldset": {
+                              borderColor: "#1d4ed8",
+                              borderWidth: 2,
+                            },
+                          },
+                          "& .MuiOutlinedInput-input": {
+                            padding: "12px 14px",
+                            fontWeight: 600,
+                          },
+                        }}
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        label="Email"
+                        value={email}
+                        type="email"
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setEmail(v);
+                          setEmailError(validateEmail(v) ? "" : "Enter a valid email");
+                        }}
+                        error={Boolean(emailError)}
+                        helperText={emailError || ""}
+                        variant="outlined"
+                        sx={{
+                          "& .MuiOutlinedInput-root": {
+                            borderRadius: 2,
+                            bgcolor: "white",
+                            transition: "all 0.2s ease",
+                            "&:hover fieldset": {
+                              borderColor: "#3b82f6",
+                            },
+                            "&.Mui-focused fieldset": {
+                              borderColor: "#1d4ed8",
+                              borderWidth: 2,
+                            },
+                            "&.Mui-error fieldset": {
+                              borderColor: "#ef4444",
+                            },
+                          },
+                          "& .MuiOutlinedInput-input": {
+                            padding: "12px 14px",
+                            fontWeight: 600,
+                          },
+                        }}
+                      />
+                    </Grid>
+
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        label="Phone Number"
+                        value={phoneNo}
+                        type="tel"
+                        inputMode="numeric"
+                        onChange={(e) => {
+                          const v = cleanPhoneInput(e.target.value);
+                          setPhoneNo(v);
+                          setPhoneError(v.length === 10 ? "" : "Phone number must be exactly 10 digits");
+                        }}
+                        error={Boolean(phoneError)}
+                        helperText={phoneError || ""}
+                        variant="outlined"
+                        sx={{
+                          "& .MuiOutlinedInput-root": {
+                            borderRadius: 2,
+                            bgcolor: "white",
+                            transition: "all 0.2s ease",
+                            "&:hover fieldset": {
+                              borderColor: "#3b82f6",
+                            },
+                            "&.Mui-focused fieldset": {
+                              borderColor: "#1d4ed8",
+                              borderWidth: 2,
+                            },
+                            "&.Mui-error fieldset": {
+                              borderColor: "#ef4444",
+                            },
+                          },
+                          "& .MuiOutlinedInput-input": {
+                            padding: "12px 14px",
+                            fontWeight: 600,
+                          },
+                        }}
+                      />
+                    </Grid>
+                  </Grid>
+
+                  <Divider sx={{ mb: 3 }} />
+
+                  <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                    <Button
+                      variant="contained"
+                      startIcon={<SaveIcon />}
+                      onClick={handleSave}
+                      disabled={saving}
+                      sx={{
+                        flex: 1,
+                        py: 1.5,
+                        textTransform: "none",
+                        fontWeight: 700,
+                        fontSize: "1rem",
+                        borderRadius: 2,
+                        background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                      }}
+                    >
+                      {saving ? "Saving..." : "Save Changes"}
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      onClick={handleReset}
+                      disabled={saving}
+                      sx={{
+                        flex: 1,
+                        py: 1.5,
+                        textTransform: "none",
+                        fontWeight: 700,
+                        fontSize: "1rem",
+                        borderRadius: 2,
+                        border: "2px solid #e2e8f0",
+                        color: "#64748b",
+                        "&:hover": {
+                          bgcolor: "#f1f5f9",
+                          borderColor: "#cbd5e1",
+                        },
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </Stack>
+                </Paper>
+              ) : (
+                <Grid container spacing={3}  alignItems="center">
+                  <Grid item xs={12} sm={6}>
+                    <Box
+                      sx={{
+                        p: 2.5,
+                        borderRadius: 2,
+                        bgcolor: "#f0f9ff",
+                        border: "1px solid #bfdbfe",
+                      }}
+                    >
+                      <Typography variant="caption" sx={{ color: "#0369a1", fontWeight: 700, display: "block", mb: 0.5 }}>
+                        Username
+                      </Typography>
+                      <Typography variant="h6" fontWeight={700} sx={{ color: "#1e293b" }}>
+                        {username || "-"}
+                      </Typography>
+                    </Box>
+                  </Grid>
+
+                  <Grid item xs={12} sm={6}>
+                    <Box
+                      sx={{
+                        p: 2.5,
+                        borderRadius: 2,
+                        bgcolor: "#fef3c7",
+                        border: "1px solid #fcd34d",
+                      }}
+                    >
+                      <Typography variant="caption" sx={{ color: "#92400e", fontWeight: 700, display: "block", mb: 0.5 }}>
+                        Roll Number
+                      </Typography>
+                      <Typography variant="h6" fontWeight={700} sx={{ color: "#1e293b" }}>
+                        {rollNo || "-"}
+                      </Typography>
+                    </Box>
+                  </Grid>
+
+                  <Grid item xs={12}>
+                    <Box
+                      sx={{
+                        p: 2.5,
+                        borderRadius: 2,
+                        bgcolor: "#dcfce7",
+                        border: "1px solid #86efac",
+                      }}
+                    >
+                      <Typography variant="caption" sx={{ color: "#15803d", fontWeight: 700, display: "block", mb: 0.5 }}>
+                        Email
+                      </Typography>
+                      <Typography variant="body1" fontWeight={600} sx={{ color: "#1e293b", wordBreak: "break-all" }}>
+                        {email || "-"}
+                      </Typography>
+                    </Box>
+                  </Grid>
+
+                  <Grid item xs={12}>
+                    <Box
+                      sx={{
+                        p: 2.5,
+                        borderRadius: 2,
+                        bgcolor: "#ede9fe",
+                        border: "1px solid #d8b4fe",
+                      }}
+                    >
+                      <Typography variant="caption" sx={{ color: "#6d28d9", fontWeight: 700, display: "block", mb: 0.5 }}>
+                        Phone Number
+                      </Typography>
+                      <Typography variant="body1" fontWeight={600} sx={{ color: "#1e293b" }}>
+                        {phoneNo || "-"}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                </Grid>
+              )}
+
+              {msg && (
+                <Alert
+                  severity={msg.toLowerCase().includes("fail") ? "error" : "success"}
+                  sx={{ mt: 3 }}
+                >
+                  {msg}
+                </Alert>
+              )}
+            </Paper>
+          </Grid>
+
+          {/* Order Statistics - Full Width Below */}
+          <Grid item xs={12}>
+            <Paper
+              elevation={0}
+              sx={{
+                p: 3,
+                borderRadius: 3,
+                background: "white",
+                border: "1px solid #e2e8f0",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+              }}
+            >
+              <Typography variant="h5" fontWeight={700} sx={{ mb: 3, color: "#1e293b" }}>
+                Order Statistics
+              </Typography>
+              <Grid container spacing={2}>
+                {[{
+                  label: "Pending",
+                  key: "pending",
+                  color: "#f59e0b",
+                  bg: "#fef3c7",
+                }, {
+                  label: "Preparing",
+                  key: "preparing",
+                  color: "#3b82f6",
+                  bg: "#dbeafe",
+                }, {
+                  label: "Completed",
+                  key: "completed",
+                  color: "#10b981",
+                  bg: "#d1fae5",
+                }, {
+                  label: "Cancelled",
+                  key: "cancelled",
+                  color: "#ef4444",
+                  bg: "#fee2e2",
+                }].map((stat) => (
+                  <Grid item xs={12} sm={6} md={3} key={stat.key}>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        p: 3,
+                        borderRadius: 2,
+                        bgcolor: stat.bg,
+                        border: "1px solid",
+                        borderColor: stat.color + "40",
+                        textAlign: "center",
+                        transition: "all 0.3s ease",
+                        "&:hover": {
+                          transform: "translateY(-4px)",
+                          boxShadow: "0 8px 16px rgba(0,0,0,0.1)",
+                        },
+                      }}
+                    >
+                      <Typography variant="body2" fontWeight={700} sx={{ color: "#64748b", mb: 1, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                        {stat.label}
+                      </Typography>
+                      <Typography variant="h3" fontWeight={900} sx={{ color: stat.color }}>
+                        {ordersLoading ? "-" : orderCounts[stat.key] ?? 0}
+                      </Typography>
+                    </Box>
+                  </Grid>
+                ))}
+              </Grid>
+            </Paper>
+          </Grid>
+        </Grid>
+      </Container>
+
+      {/* Add Money Dialog */}
+      <Dialog open={addMoneyOpen} onClose={() => setAddMoneyOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle sx={{ fontWeight: 700 }}>Add Money to Wallet</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Amount (₹)"
+            type="number"
+            fullWidth
+            value={addAmount}
+            onChange={(e) => setAddAmount(e.target.value)}
+            error={Boolean(addError)}
+            helperText={addError || ""}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAddMoneyOpen(false)} disabled={addSaving}>Cancel</Button>
+          <Button onClick={handleAddMoney} variant="contained" disabled={addSaving}>
+            {addSaving ? "Adding..." : "Add Money"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
   );
 }

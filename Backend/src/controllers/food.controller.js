@@ -10,7 +10,7 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js";
 const addItem = asyncHandler(async (req, res) => {
   // When using multer + multipart/form-data, req.body values are strings.
   // Accept string values and coerce them properly. Also allow price = 0.
-  let { itemname, price, category, stock } = req.body || {};
+  let { itemname, price, category, stock, description } = req.body || {};
 
   // check presence (undefined or null) rather than truthiness to allow falsy but valid values
   if (
@@ -57,6 +57,7 @@ const addItem = asyncHandler(async (req, res) => {
     category,
     inStock: inStockBool,
     stock: parsedStock,
+    description: typeof description === "string" ? description.trim() : "",
   });
 
   if (!Product) {
@@ -76,7 +77,7 @@ const addItem = asyncHandler(async (req, res) => {
 const updateItem = asyncHandler(async (req, res) => {
   // Simple req.body based update handler.
   // Accepts either { id, ...fields } or { oldItemname, ...fields }
-  const { id, oldItemname, itemname, price, category, inStock, image, stock } =
+  const { id, oldItemname, itemname, price, category, inStock, image, stock, description } =
     req.body || {};
 
   if (!id && !oldItemname) {
@@ -116,6 +117,10 @@ const updateItem = asyncHandler(async (req, res) => {
     if (typeof update.inStock === "undefined") {
       update.inStock = s > 0;
     }
+  }
+
+  if (typeof description !== "undefined") {
+    update.description = typeof description === "string" ? description.trim() : "";
   }
 
   if (typeof image !== "undefined") update.image = image;

@@ -596,4 +596,65 @@ const getCategoryFoodRevenueStats = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, organized, "Category food revenue stats fetched"));
 });
 
-export { createOrder, getOrderList, getUserOrderList, markCompleteByBarcode, markPreparing, getDailyOrderStats, getCategoryFoodStats, getCategoryCrossStats, getCategoryRevenueStats, getCategoryFoodRevenueStats };
+const getOrderStats = asyncHandler(async (req, res) => {
+  // Get count of pre-orders and normal orders
+  const stats = await Order.aggregate([
+    {
+      $group: {
+        _id: null,
+        preOrder: {
+          $sum: { $cond: ["$pre", 1, 0] }
+        },
+        normalOrder: {
+          $sum: { $cond: ["$pre", 0, 1] }
+        }
+      }
+    }
+  ]);
+
+  const result = stats.length > 0 
+    ? { preOrder: stats[0].preOrder || 0, normalOrder: stats[0].normalOrder || 0 }
+    : { preOrder: 0, normalOrder: 0 };
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, result, "Order stats fetched"));
+});
+
+const getOrderStatusStats = asyncHandler(async (req, res) => {
+  // Get count of orders by status (pending, preparing, completed, cancelled)
+  const stats = await Order.aggregate([
+    {
+      $group: {
+        _id: null,
+        pending: {
+          $sum: { $cond: [{ $eq: ["$status", "pending"] }, 1, 0] }
+        },
+        preparing: {
+          $sum: { $cond: [{ $eq: ["$status", "preparing"] }, 1, 0] }
+        },
+        completed: {
+          $sum: { $cond: [{ $eq: ["$status", "completed"] }, 1, 0] }
+        },
+        cancelled: {
+          $sum: { $cond: [{ $eq: ["$status", "cancelled"] }, 1, 0] }
+        }
+      }
+    }
+  ]);
+
+  const result = stats.length > 0 
+    ? { 
+        pending: stats[0].pending || 0, 
+        preparing: stats[0].preparing || 0, 
+        completed: stats[0].completed || 0, 
+        cancelled: stats[0].cancelled || 0 
+      }
+    : { pending: 0, preparing: 0, completed: 0, cancelled: 0 };
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, result, "Order status stats fetched"));
+});
+
+export { createOrder, getOrderList, getUserOrderList, markCompleteByBarcode, markPreparing, getDailyOrderStats, getCategoryFoodStats, getCategoryCrossStats, getCategoryRevenueStats, getCategoryFoodRevenueStats, getOrderStats, getOrderStatusStats };

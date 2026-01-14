@@ -11,12 +11,13 @@ import {
   Button,
   Paper,
   InputAdornment,
+  Container,
 } from "@mui/material";
 import PersonIcon from "@mui/icons-material/Person";
 import LockIcon from "@mui/icons-material/Lock";
 
 export default function Login() {
-  const [username, setUsername] = useState("");
+  const [credential, setCredential] = useState("");
   const [password, setPassword] = useState("");
   const navigate = useNavigate();
   const { login } = useContext(CartContext);
@@ -25,7 +26,12 @@ export default function Login() {
   async function handleLogin() {
     // setLoading(true);
     try {
-      const res = await post("/users/login", { username, password });
+      // Send credential as both username and email; backend will check with $or
+      const res = await post("/users/login", { 
+        username: credential, 
+        email: credential, 
+        password 
+      });
       console.log("Login response:", res);
       if (res?.success && res?.data?.user) {
         const user = res.data.user;
@@ -55,79 +61,165 @@ export default function Login() {
     <Box
       sx={{
         minHeight: "100vh",
+        background: "#f5f5f5",
         display: "flex",
-        justifyContent: "center",
         alignItems: "center",
-        bgcolor: "#f4f6f8",
-        p: 2,
+        justifyContent: "center",
+        py: { xs: 4, md: 0 },
       }}
     >
-      <Paper
-        elevation={4}
-        sx={{
-          width: "100%",
-          maxWidth: 420,
-          p: 4,
-          borderRadius: 3,
-        }}
-      >
-        <Typography variant="h4" fontWeight={600} textAlign="center" mb={2}>
-          Login
-        </Typography>
-
-        <TextField
-          label="Username or Email"
-          fullWidth
-          margin="normal"
-          value={username}
-          onChange={(e) => setUsername(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <PersonIcon fontSize="small" />
-              </InputAdornment>
-            ),
+      <Container maxWidth="xs">
+        <Paper
+          elevation={1}
+          sx={{
+            p: { xs: 3, sm: 5 },
+            borderRadius: 2,
+            background: "#ffffff",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
           }}
-        />
-
-        <TextField
-          label="Password"
-          fullWidth
-          margin="normal"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <LockIcon fontSize="small" />
-              </InputAdornment>
-            ),
-          }}
-        />
-
-        <Button
-          variant="contained"
-          fullWidth
-          sx={{ mt: 3, py: 1.3, fontSize: 16, borderRadius: 2 }}
-          onClick={handleLogin}
         >
-          Login
-        </Button>
+          {/* Header */}
+          <Box sx={{ textAlign: "center", mb: 4 }}>
+            <Typography
+              variant="h4"
+              fontWeight={700}
+              sx={{
+                mb: 1,
+                color: "#1a1a1a",
+              }}
+            >
+              Sign In
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{
+                color: "#666666",
+              }}
+            >
+              Login to DBIT Canteen
+            </Typography>
+          </Box>
 
-        <Box textAlign="center" mt={2}>
-          <Link
-            to="/"
-            style={{
-              textDecoration: "none",
-              fontSize: 14,
-              color: "#1976d2",
+          {/* Username or Email */}
+          <TextField
+            label="Username or Email"
+            value={credential}
+            onChange={(e) => setCredential(e.target.value)}
+            fullWidth
+            variant="outlined"
+            size="small"
+            autoComplete="off"
+            placeholder="Enter your username or email"
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <PersonIcon sx={{ color: "#999999", mr: 0.5, fontSize: 20 }} />
+                </InputAdornment>
+              ),
+            }}
+            sx={{
+              mb: 2.5,
+              "& .MuiOutlinedInput-root": {
+                background: "#fafafa",
+                borderRadius: 1,
+                "& fieldset": {
+                  borderColor: "#e0e0e0",
+                },
+                "&:hover fieldset": {
+                  borderColor: "#cccccc",
+                },
+                "&.Mui-focused fieldset": {
+                  borderColor: "#1976d2",
+                },
+              },
+              "& .MuiOutlinedInput-input": {
+                color: "#1a1a1a",
+                caretColor: "#1976d2",
+              },
+            }}
+          />
+
+          {/* Password */}
+          <TextField
+            label="Password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            fullWidth
+            variant="outlined"
+            size="small"
+            autoComplete="new-password"
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <LockIcon sx={{ color: "#999999", mr: 0.5, fontSize: 20 }} />
+                </InputAdornment>
+              ),
+            }}
+            sx={{
+              mb: 3,
+              "& .MuiOutlinedInput-root": {
+                background: "#fafafa",
+                borderRadius: 1,
+                "& fieldset": {
+                  borderColor: "#e0e0e0",
+                },
+                "&:hover fieldset": {
+                  borderColor: "#cccccc",
+                },
+                "&.Mui-focused fieldset": {
+                  borderColor: "#1976d2",
+                },
+              },
+              "& .MuiOutlinedInput-input": {
+                color: "#1a1a1a",
+                caretColor: "#1976d2",
+              },
+            }}
+          />
+
+          {/* Login Button */}
+          <Button
+            variant="contained"
+            fullWidth
+            onClick={handleLogin}
+            sx={{
+              py: 1.2,
+              fontSize: "0.95rem",
+              fontWeight: 600,
+              borderRadius: 1,
+              textTransform: "none",
+              transition: "all 0.2s",
+              background: "#1976d2",
+              "&:hover": {
+                background: "#1565c0",
+              },
+              "&:disabled": {
+                background: "#cccccc",
+              },
             }}
           >
-            Don’t have an account? Register
-          </Link>
-        </Box>
-      </Paper>
+            Sign In
+          </Button>
+
+          {/* Register Link */}
+          <Box sx={{ textAlign: "center", mt: 3 }}>
+            <Typography variant="body2" sx={{ color: "#666666" }}>
+              Don't have an account?{" "}
+              <Link
+                to="/"
+                style={{
+                  textDecoration: "none",
+                  color: "#1976d2",
+                  fontWeight: 600,
+                }}
+              >
+                Register here
+              </Link>
+            </Typography>
+          </Box>
+        </Paper>
+      </Container>
     </Box>
   );
 }

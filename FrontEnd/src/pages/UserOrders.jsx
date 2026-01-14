@@ -35,6 +35,7 @@ import FilterListIcon from "@mui/icons-material/FilterList";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import QrCode2Icon from "@mui/icons-material/QrCode2";
 import ImageIcon from "@mui/icons-material/Image";
+import AssignmentIcon from "@mui/icons-material/Assignment";
 import { post } from "../utils/api";
 
 /**
@@ -193,66 +194,119 @@ export default function OrdersDashboard() {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 3 }}>
-        <Box>
-          <Typography variant={isSm ? "h5" : "h4"} fontWeight={700}>
-            My Orders
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            View and manage your orders by status
-          </Typography>
-        </Box>
-      </Stack>
-
-      {/* Tabs for Status Filter */}
-      <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 3 }}>
-        <Tabs
-          value={activeTab}
-          onChange={(e, newValue) => {
-            setActiveTab(newValue);
-            setPage(1);
-            fetchOrders();
+    <Box sx={{ minHeight: "100vh", bgcolor: "#f8fafc" }}>
+      <Container maxWidth="lg" sx={{ pt: 4, pb: 6 }}>
+        {/* Hero Header */}
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          alignItems={{ xs: "flex-start", sm: "center" }}
+          spacing={2}
+          sx={{
+            mb: 4,
+            p: { xs: 2.5, md: 3.5 },
+            background: "linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%)",
+            borderRadius: 3,
+            color: "white",
+            boxShadow: "0 12px 40px rgba(30,64,175,0.25)",
+            position: "relative",
+            overflow: "hidden",
           }}
-          variant="scrollable"
-          scrollButtons="auto"
         >
-          <Tab label="Pending" />
-          <Tab label="Preparing" />
-          <Tab label="Completed" />
-          <Tab label="Cancelled" />
-        </Tabs>
-      </Box>
+          {/* Decorative background element */}
+          <Box
+            sx={{
+              position: "absolute",
+              top: -40,
+              right: -40,
+              width: 200,
+              height: 200,
+              borderRadius: "50%",
+              bgcolor: "rgba(255,255,255,0.05)",
+              zIndex: 0,
+            }}
+          />
 
-      {/* Filter Bar */}
-      <Card variant="outlined" sx={{ mb: 3, p: 2 }}>
-        <Grid container spacing={2} alignItems="center">
-          <Grid item xs={6} sm={8}>
-            <FormControl fullWidth size="small">
-              <InputLabel id="sort-by-label">
-                <SortIcon sx={{ mr: 0.5 }} /> Sort
-              </InputLabel>
-              <Select labelId="sort-by-label" value={sortBy} label="Sort" onChange={(e) => setSortBy(e.target.value)}>
-                <MenuItem value="newest">Newest</MenuItem>
-                <MenuItem value="oldest">Oldest</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-
-          <Grid item xs={6} sm={4} sx={{ textAlign: { xs: "left", sm: "right" } }}>
-            <Button
-              variant="contained"
-              onClick={fetchOrders}
-              startIcon={<SearchIcon />}
-              disabled={loading}
-              aria-label="refresh orders"
-              fullWidth
+          <Stack direction="row" alignItems="center" spacing={2} sx={{ zIndex: 1 }}>
+            <Box
+              sx={{
+                width: 64,
+                height: 64,
+                borderRadius: 2,
+                display: "grid",
+                placeItems: "center",
+                bgcolor: "rgba(255,255,255,0.15)",
+                border: "2px solid rgba(255,255,255,0.25)",
+              }}
             >
-              {loading ? "Loading..." : "Refresh"}
-            </Button>
-          </Grid>
-        </Grid>
-      </Card>
+              <AssignmentIcon sx={{ fontSize: 36, color: "white" }} />
+            </Box>
+            <Box>
+              <Typography variant="h3" fontWeight={900} sx={{ fontSize: { xs: "1.75rem", sm: "2.5rem" }, color: "white", lineHeight: 1 }}>
+                My Orders
+              </Typography>
+              <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.85)", mt: 0.5 }}>
+                Track & manage your orders
+              </Typography>
+            </Box>
+          </Stack>
+        </Stack>
+
+        {/* Tabs for Status Filter with Controls */}
+        <Box sx={{ mb: 3, bgcolor: "white", borderRadius: 3, p: 2, border: "1px solid #e2e8f0", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={2} alignItems={{ xs: "stretch", sm: "center" }} justifyContent="space-between">
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Tabs
+                value={activeTab}
+                onChange={(e, newValue) => {
+                  setActiveTab(newValue);
+                  setPage(1);
+                  fetchOrders();
+                }}
+                variant="scrollable"
+                scrollButtons="auto"
+                sx={{
+                  "& .MuiTab-root": {
+                    fontWeight: 600,
+                    textTransform: "none",
+                    fontSize: "0.95rem",
+                  },
+                }}
+              >
+                <Tab label="Pending" />
+                <Tab label="Preparing" />
+                <Tab label="Completed" />
+                <Tab label="Cancelled" />
+              </Tabs>
+            </Box>
+            
+            <Stack direction="row" spacing={1.5} sx={{ minWidth: { sm: "300px" } }}>
+              <FormControl size="small" sx={{ minWidth: 130 }}>
+                <InputLabel id="sort-by-label">Sort</InputLabel>
+                <Select 
+                  labelId="sort-by-label" 
+                  value={sortBy} 
+                  label="Sort" 
+                  onChange={(e) => setSortBy(e.target.value)}
+                  startAdornment={<SortIcon sx={{ ml: 1, mr: -0.5, color: "action.active", fontSize: 20 }} />}
+                >
+                  <MenuItem value="newest">Newest</MenuItem>
+                  <MenuItem value="oldest">Oldest</MenuItem>
+                </Select>
+              </FormControl>
+
+              <Button
+                variant="contained"
+                onClick={fetchOrders}
+                startIcon={<SearchIcon />}
+                disabled={loading}
+                aria-label="refresh orders"
+                sx={{ minWidth: 110 }}
+              >
+                {loading ? "..." : "Refresh"}
+              </Button>
+            </Stack>
+          </Stack>
+        </Box>
 
       {/* Message Alert */}
       {msgAlert && (
@@ -280,12 +334,13 @@ export default function OrdersDashboard() {
           </Grid>
         ) : filteredOrders.length === 0 ? (
           // Empty state
-          <Card sx={{ p: 4, textAlign: "center" }}>
-            <Typography variant="h6">No {currentStatus} orders</Typography>
-            <Typography variant="body2" color="text.secondary" sx={{ mt: 1, mb: 2 }}>
+          <Box sx={{ p: 6, textAlign: "center", bgcolor: "white", borderRadius: 3, border: "1px solid #e2e8f0", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }}>
+            <AssignmentIcon sx={{ fontSize: 64, color: "#94a3b8", mb: 2 }} />
+            <Typography variant="h5" fontWeight={700} sx={{ color: "#1e293b" }}>No {currentStatus} orders</Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
               You don't have any orders with this status yet.
             </Typography>
-          </Card>
+          </Box>
         ) : (
           <>
             <Grid container spacing={2}>
@@ -295,109 +350,247 @@ export default function OrdersDashboard() {
                 const isCancelled = status === "cancelled";
 
                 return (
-                  <Grid item xs={12} sm={6} md={4} key={o.orderNumber}>
+                  <Grid item xs={12} sm={6} md={4} key={o.orderNumber} width="32%">
                     <Card
+                      elevation={0}
                       sx={{
                         height: "100%",
                         display: "flex",
                         flexDirection: "column",
                         justifyContent: "space-between",
-                        transition: "transform .18s ease, box-shadow .18s ease",
+                        borderRadius: 3,
+                        background: "white",
+                        border: "1px solid #e2e8f0",
+                        transition: "all 0.3s ease",
+                        boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                        overflow: "hidden",
                         "&:hover": {
-                          transform: "translateY(-6px)",
-                          boxShadow: (theme) => theme.shadows[6],
+                          transform: "translateY(-8px)",
+                          boxShadow: "0 16px 40px rgba(0,0,0,0.15)",
+                          borderColor: "#1d4ed8",
                         },
                       }}
                       role="article"
                       aria-label={`Order ${o.orderNumber}`}
                     >
-                      <CardContent>
-                        <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
-                          <Typography variant="subtitle1" fontWeight={700}>
-                            #{o.orderNumber}
-                          </Typography>
-                          {statusChip(o.status)}
-                        </Stack>
-
-                      <Typography variant="body2" color="text.secondary">
-                        Placed By: <b>{o.orderedBy || "You"}</b>
-                      </Typography>
-
-                      <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: "wrap" }}>
-                        <Chip label={`${o.items?.length || 0} items`} size="small" />
-                        <Chip label={`Total ₹${o.total || o.amount || "—"}`} size="small" />
-                        {o.pre && <Chip label="Pre-Order" size="small" color="secondary" />}
-                        <Chip label={`Created: ${new Date(o.createdAt || o.date || Date.now()).toLocaleString()}`} size="small" />
-                      </Stack>
-
-                      {/* optional short items preview */}
-                      <Box sx={{ mt: 1 }}>
-                        <Typography variant="body2" color="text.secondary" noWrap>
-                          {(() => {
-                            const list = o.items || [];
-                            if (!list.length) return "No items listed";
-
-                            const grouped = {};
-                            for (const it of list) {
-                              const label = it.itemname || it.name || it.title || "Item";
-                              const key = it._id || label;
-                              if (!grouped[key]) grouped[key] = { label, qty: 0 };
-                              grouped[key].qty += 1;
-                            }
-
-                            return Object.values(grouped)
-                              .slice(0, 3)
-                              .map((g) => `${g.label} x${g.qty}`)
-                              .join(", ");
-                          })()}
+                      {/* Status Banner */}
+                      <Box
+                        sx={{
+                          py: 1,
+                          px: 2,
+                          background: status === "completed" 
+                            ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
+                            : status === "preparing"
+                            ? "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)"
+                            : status === "cancelled"
+                            ? "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)"
+                            : "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)",
+                          color: "white",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <Typography variant="h6" fontWeight={800} sx={{ fontSize: "1.1rem" }}>
+                          #{o.orderNumber}
                         </Typography>
+                        <Chip 
+                          label={status.charAt(0).toUpperCase() + status.slice(1)} 
+                          size="small"
+                          sx={{
+                            bgcolor: "rgba(255,255,255,0.25)",
+                            color: "white",
+                            fontWeight: 700,
+                            border: "1px solid rgba(255,255,255,0.3)",
+                          }}
+                        />
                       </Box>
-                    </CardContent>
 
-                      <CardActions sx={{ justifyContent: "space-between", px: 2, pb: 2 }}>
-                        <Box>
-                          <Tooltip title="More info">
-                            <IconButton size="small" aria-label="order info">
-                              <InfoOutlinedIcon />
-                            </IconButton>
-                          </Tooltip>
-                        </Box>
+                      <CardContent sx={{ flex: 1, p: 2.5 }}>
+                        {/* Order Details Section */}
+                        <Stack spacing={2}>
+                          {/* Placed By */}
+                          <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: "#f1f5f9", border: "1px solid #cbd5e1" }}>
+                            <Stack direction="row" justifyContent="space-between" alignItems="center">
+                              <Box>
+                                <Typography variant="caption" sx={{ color: "#64748b", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                                  Placed By
+                                </Typography>
+                                <Typography variant="body1" fontWeight={700} sx={{ color: "#1e293b" }}>
+                                  {o.orderedBy || "You"}
+                                </Typography>
+                              </Box>
+                              {o.pre && (
+                                <Chip 
+                                  label="Pre-Order" 
+                                  size="small"
+                                  sx={{
+                                    bgcolor: "#ede9fe",
+                                    color: "#6d28d9",
+                                    fontWeight: 700,
+                                    border: "1px solid #d8b4fe",
+                                  }}
+                                  icon={<span style={{ fontSize: "1rem" }}>🕐</span>}
+                                />
+                              )}
+                            </Stack>
+                          </Box>
 
-                        <Stack direction="row" spacing={1}>
-                          {!isCompleted && !isCancelled && (
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              startIcon={<QrCode2Icon />}
-                              onClick={() => openQrDialog(o)}
-                              aria-label={`qr code for ${o.orderNumber}`}
-                              disabled={!o.qrcode}
-                            >
-                              QR Code
-                            </Button>
-                          )}
+                          {/* Items Detailed List */}
+                          <Box 
+                            sx={{ 
+                              p: 2, 
+                              borderRadius: 2, 
+                              bgcolor: "#f0f9ff",
+                              border: "1px solid #bfdbfe",
+                            }}
+                          >
+                            <Typography variant="caption" sx={{ color: "#0369a1", fontWeight: 700, display: "block", mb: 1 }}>
+                              Order Items
+                            </Typography>
+                            <Stack spacing={0.75}>
+                              {(() => {
+                                const list = o.items || [];
+                                if (!list.length) return <Typography variant="body2" sx={{ color: "#64748b" }}>No items</Typography>;
+
+                                const grouped = {};
+                                for (const it of list) {
+                                  const label = it.itemname || it.name || it.title || "Item";
+                                  const key = it._id || label;
+                                  const price = Number(it.price || 0);
+                                  if (!grouped[key]) grouped[key] = { label, qty: 0, price };
+                                  grouped[key].qty += 1;
+                                }
+
+                                return Object.values(grouped).map((g, idx) => (
+                                  <Box 
+                                    key={idx}
+                                    sx={{ 
+                                      display: "flex", 
+                                      justifyContent: "space-between",
+                                      alignItems: "center",
+                                      py: 0.5,
+                                      borderBottom: idx < Object.values(grouped).length - 1 ? "1px dashed #bfdbfe" : "none",
+                                    }}
+                                  >
+                                    <Typography variant="body2" sx={{ color: "#334155", fontWeight: 600, flex: 1 }}>
+                                      {g.label}
+                                    </Typography>
+                                    <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+                                      <Chip 
+                                        label={`×${g.qty}`} 
+                                        size="small"
+                                        sx={{
+                                          height: "20px",
+                                          fontSize: "0.7rem",
+                                          fontWeight: 700,
+                                          bgcolor: "#dbeafe",
+                                          color: "#1e40af",
+                                        }}
+                                      />
+                                      <Typography variant="body2" fontWeight={700} sx={{ color: "#0369a1", minWidth: "50px", textAlign: "right" }}>
+                                        ₹{(g.price * g.qty).toFixed(0)}
+                                      </Typography>
+                                    </Box>
+                                  </Box>
+                                ));
+                              })()}
+                            </Stack>
+                          </Box>
+
+                          {/* Stats Grid */}
+                          <Grid container spacing={1.5} justifyContent="center">
+                            <Grid item xs={4}>
+                              <Box sx={{ p: 1, borderRadius: 2, bgcolor: "#dcfce7", border: "1px solid #86efac", textAlign: "center" }}>
+                                <Typography variant="caption" sx={{ color: "#15803d", fontWeight: 700, display: "block", fontSize: "0.65rem" }}>
+                                  ITEMS
+                                </Typography>
+                                <Typography variant="h6" fontWeight={900} sx={{ color: "#166534", fontSize: "1.25rem" }}>
+                                  {o.items?.length || 0}
+                                </Typography>
+                              </Box>
+                            </Grid>
+                            <Grid item xs={4}>
+                              <Box sx={{ p: 1, borderRadius: 2, bgcolor: "#fef3c7", border: "1px solid #fcd34d", textAlign: "center" }}>
+                                <Typography variant="caption" sx={{ color: "#92400e", fontWeight: 700, display: "block", fontSize: "0.65rem" }}>
+                                  TOTAL
+                                </Typography>
+                                <Typography variant="h6" fontWeight={900} sx={{ color: "#b45309", fontSize: "1.25rem" }}>
+                                  ₹{o.total || o.amount || "—"}
+                                </Typography>
+                              </Box>
+                            </Grid>
+                            <Grid item xs={4}>
+                              <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: "#fef2f2", border: "1px solid #fecaca", textAlign: "center" }}>
+                                <Typography variant="caption" sx={{ color: "#991b1b", fontWeight: 700, display: "block", fontSize: "0.65rem" }}>
+                                  ORDER PLACED
+                                </Typography>
+                                <Typography variant="caption" fontWeight={900} sx={{ color: "#7f1d1d", fontSize: "0.7rem", lineHeight: 1.3 }}>
+                                  {new Date(o.createdAt || o.date || Date.now()).toLocaleString("en-IN", { 
+                                    day: "2-digit",
+                                    month: "short",
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </Typography>
+                              </Box>
+                            </Grid>
+                          </Grid>
+                        </Stack>
+                      </CardContent>
+
+                      <CardActions sx={{ p: 2, pt: 0, gap: 1, flexWrap: "wrap" }}>
+                        {!isCompleted && !isCancelled && (
                           <Button
                             size="small"
                             variant="outlined"
-                            startIcon={<ImageIcon />}
-                            onClick={() => openReceiptDialog(o)}
-                            aria-label={`receipt ${o.orderNumber}`}
-                            disabled={!(o.receiptImageUrlNoBarcode || o.receiptImageUrl || o.receiptImageurl)}
+                            startIcon={<QrCode2Icon />}
+                            onClick={() => openQrDialog(o)}
+                            aria-label={`qr code for ${o.orderNumber}`}
+                            disabled={!o.qrcode}
+                            sx={{ 
+                              flex: 1,
+                              minWidth: "45%",
+                              fontWeight: 600,
+                              borderRadius: 2,
+                            }}
                           >
-                            Receipt
+                            QR Code
                           </Button>
-                          {!isCompleted && !isCancelled && (
-                            <Button
-                              size="small"
-                              color="error"
-                              startIcon={<CancelIcon />}
-                              onClick={() => openCancelDialog(o.orderNumber)}
-                              aria-label={`cancel ${o.orderNumber}`}
-                            >
-                              Cancel
-                            </Button>
-                          )}
-                        </Stack>
+                        )}
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          startIcon={<ImageIcon />}
+                          onClick={() => openReceiptDialog(o)}
+                          aria-label={`receipt ${o.orderNumber}`}
+                          disabled={!(o.receiptImageUrlNoBarcode || o.receiptImageUrl || o.receiptImageurl)}
+                          sx={{ 
+                            flex: 1,
+                            minWidth: "45%",
+                            fontWeight: 600,
+                            borderRadius: 2,
+                          }}
+                        >
+                          Receipt
+                        </Button>
+                        {!isCompleted && !isCancelled && (
+                          <Button
+                            size="small"
+                            variant="contained"
+                            color="error"
+                            startIcon={<CancelIcon />}
+                            onClick={() => openCancelDialog(o.orderNumber)}
+                            aria-label={`cancel ${o.orderNumber}`}
+                            fullWidth
+                            sx={{ 
+                              fontWeight: 700,
+                              borderRadius: 2,
+                            }}
+                          >
+                            Cancel Order
+                          </Button>
+                        )}
                       </CardActions>
                     </Card>
                   </Grid>
@@ -470,6 +663,7 @@ export default function OrdersDashboard() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Container>
+      </Container>
+    </Box>
   );
 }

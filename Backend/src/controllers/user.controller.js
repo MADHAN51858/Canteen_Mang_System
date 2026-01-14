@@ -711,6 +711,40 @@ const updateProfile = asyncHandler(async (req, res) => {
   );
 });
 
+const withdrawAmount = asyncHandler(async (req, res) => {
+  const { userId, amount } = req.body;
+
+  if (!userId || !amount) {
+    throw new ApiError(400, "User ID and amount are required");
+  }
+
+  if (amount <= 0) {
+    throw new ApiError(400, "Amount must be greater than 0");
+  }
+
+  const user = await User.findById(userId);
+
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  if (user.walletBalance < amount) {
+    throw new ApiError(400, "Insufficient wallet balance");
+  }
+
+  // Deduct amount from wallet
+  user.walletBalance = (user.walletBalance || 0) - amount;
+  await user.save({ validateBeforeSave: false });
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      { user, withdrawnAmount: amount, newBalance: user.walletBalance },
+      `Successfully withdrawn ₹${amount}`
+    )
+  );
+});
+
 export {
   registerUser,
   addFriends,
@@ -730,4 +764,5 @@ export {
   addMoneyToWallet,
   deductFromWallet,
   updateProfile,
+  withdrawAmount,
 };

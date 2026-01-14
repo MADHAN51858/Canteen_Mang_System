@@ -9,6 +9,8 @@ import {
     getCategoryCrossStats,
     getCategoryRevenueStats,
     getCategoryFoodRevenueStats,
+    getOrderStats,
+    getOrderStatusStats,
 } from "../controllers/order.controller.js"
 import { verifyJwt } from "../middlewares/auth.middleware.js"
 
@@ -24,6 +26,8 @@ router.route("/getCategoryFoodStats").post(verifyJwt, getCategoryFoodStats)
 router.route("/getCategoryCrossStats").post(verifyJwt, getCategoryCrossStats)
 router.route("/getCategoryRevenueStats").post(verifyJwt, getCategoryRevenueStats)
 router.route("/getCategoryFoodRevenueStats").post(verifyJwt, getCategoryFoodRevenueStats)
+router.route("/getOrderStats").post(verifyJwt, getOrderStats)
+router.route("/getOrderStatusStats").post(verifyJwt, getOrderStatusStats)
 
 
 export default router;

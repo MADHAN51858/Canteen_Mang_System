@@ -1,37 +1,63 @@
-
-
-
-
-
-import { useState, useContext } from "react";
+import { useState, useContext, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { CartContext } from "../context/CartContext";
 import { ThemeContext } from "../context/ThemeContext";
 import { logout as apiLogout } from "../utils/api";
 import {
-  AppBar,
-  Toolbar,
-  Typography,
-  Box,
-  IconButton,
-  Button,
-  Badge,
   Drawer,
-  List,
-  ListItemButton,
-  ListItemText,
+  Box,
+  Typography,
+  Button,
+  Stack,
+  IconButton,
+  Divider,
+  Badge,
 } from "@mui/material";
-import MenuIcon from "@mui/icons-material/Menu";
-import LogoutIcon from "@mui/icons-material/Logout";
-import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import Brightness4Icon from "@mui/icons-material/Brightness4";
 import Brightness7Icon from "@mui/icons-material/Brightness7";
+import LogoutIcon from "@mui/icons-material/Logout";
+import RestaurantMenuIcon from "@mui/icons-material/RestaurantMenu";
+import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
+import AssignmentIcon from "@mui/icons-material/Assignment";
+import PersonIcon from "@mui/icons-material/Person";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+
+const DRAWER_WIDTH = 280;
+const COLLAPSED_WIDTH = 0; // Fully hidden when collapsed
+
+let drawerOpenState = true;
+let drawerOpenListeners = [];
+
+function notifyDrawerChange(isOpen) {
+  drawerOpenState = isOpen;
+  drawerOpenListeners.forEach(listener => listener(isOpen));
+}
+
+export function useDrawerState() {
+  const [open, setOpen] = useState(drawerOpenState);
+  
+  useEffect(() => {
+    const listener = (isOpen) => setOpen(isOpen);
+    drawerOpenListeners.push(listener);
+    return () => {
+      drawerOpenListeners = drawerOpenListeners.filter(l => l !== listener);
+    };
+  }, []);
+  
+  return open;
+}
 
 export default function Header() {
+  const [open, setOpen] = useState(true);
   const { cart, clearCart, clearUser } = useContext(CartContext);
   const { isDark, toggleTheme } = useContext(ThemeContext);
   const navigate = useNavigate();
-  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const handleToggle = () => {
+    const newState = !open;
+    setOpen(newState);
+    notifyDrawerChange(newState);
+  };
 
   async function handleLogout() {
     await apiLogout();
@@ -41,133 +67,143 @@ export default function Header() {
     navigate("/login");
   }
 
-  const navItems = [
-    { label: "Menu", to: "/student/menu" },
-    { label: "Cart", to: "/student/cart", cartCount: cart.length },
-    { label: "Orders", to: "/student/orders" },
-    // { label: "Wallet", to: "/student/wallet" },
-    { label: "Profile", to: "/student/profile" },
+  const menuItems = [
+    { label: "Menu", to: "/student/menu", icon: <RestaurantMenuIcon /> },
+    { label: "Cart", to: "/student/cart", icon: <ShoppingCartIcon />, badge: cart.length },
+    { label: "Orders", to: "/student/orders", icon: <AssignmentIcon /> },
+    { label: "Profile", to: "/student/profile", icon: <PersonIcon /> },
   ];
 
   return (
     <>
-      <AppBar
-        position="sticky"
-        elevation={4}
+      {/* Toggle Button */}
+      <IconButton
+        onClick={handleToggle}
         sx={{
-          backdropFilter: "blur(12px)",
-          background: isDark 
-            ? "linear-gradient(135deg, rgba(26, 31, 58, 0.95) 0%, rgba(15, 23, 42, 0.95) 100%)"
-            : "linear-gradient(135deg, #1565c0 0%, #0e40ad 100%)",
-          color: isDark ? "#f1f5f9" : "white",
-          borderBottom: isDark ? "1px solid #334155" : "none",
+          position: "fixed",
+          left: open ? DRAWER_WIDTH - 50 : 10,
+          top: 10,
+          zIndex: 1300,
+          background: "#1976d2",
+          color: "white",
+          transition: "left 0.3s ease",
+          "&:hover": {
+            background: "#1565c0",
+          },
         }}
       >
-        <Toolbar sx={{ display: "flex", justifyContent: "space-between" }}>
-          {/* Brand */}
-          <Typography 
-            variant="h6" 
-            fontWeight={700} 
-            sx={{ cursor: "pointer" }} 
-            onClick={() => navigate("/student/menu")}
-          >
+        <ChevronLeftIcon 
+          sx={{ 
+            transform: open ? "rotate(0deg)" : "rotate(180deg)",
+            transition: "transform 0.3s ease"
+          }} 
+        />
+      </IconButton>
+
+      <Drawer
+        variant="persistent"
+        open={open}
+        sx={{
+          width: DRAWER_WIDTH,
+          flexShrink: 0,
+          "& .MuiDrawer-paper": {
+            width: DRAWER_WIDTH,
+            boxSizing: "border-box",
+            background: "#1976d2",
+            color: "white",
+            display: "flex",
+            flexDirection: "column",
+          },
+        }}
+      >
+        {/* Header/Brand */}
+        <Box sx={{ p: 3, borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+          <Typography variant="h6" fontWeight={700} sx={{ fontSize: "1.1rem", letterSpacing: 0.5 }}>
             DBIT Canteen
           </Typography>
+          <Typography variant="caption" sx={{ color: "rgba(255,255,255,0.7)" }}>
+            Student Panel
+          </Typography>
+        </Box>
 
-          {/* Desktop Menu */}
-          <Box sx={{ display: { xs: "none", md: "flex" }, gap: 1, alignItems: "center", flex: 1, justifyContent: "center" }}>
-            {navItems.map((item) => (
-              <Button 
-                key={item.label} 
-                component={Link} 
-                to={item.to} 
-                sx={{ 
-                  textTransform: "none", 
-                  fontWeight: 600,
-                  color: isDark ? "#f1f5f9" : "white",
-                  "&:hover": {
-                    bgcolor: isDark ? "rgba(66, 165, 245, 0.15)" : "rgba(255, 255, 255, 0.2)",
-                  },
-                }}
-              >
-                {item.label}
-                {item.cartCount > 0 && (
-                  <Badge badgeContent={item.cartCount} sx={{ ml: 1 }} />
-                )}
-              </Button>
-            ))}
-          </Box>
-
-          {/* Theme Toggle + Logout */}
-          <Box sx={{ display: "flex", gap: 1 }}>
-            <IconButton 
-              onClick={toggleTheme} 
-              sx={{ color: isDark ? "#f1f5f9" : "white" }}
-              title={isDark ? "Light mode" : "Dark mode"}
-            >
-              {isDark ? <Brightness7Icon /> : <Brightness4Icon />}
-            </IconButton>
-
+        {/* Navigation Items */}
+        <Stack spacing={1} sx={{ flex: 1, p: 2 }}>
+          {menuItems.map((item) => (
             <Button
-              onClick={handleLogout}
-              variant="outlined"
+              key={item.to}
+              component={Link}
+              to={item.to}
+              startIcon={item.icon}
+              endIcon={item.badge > 0 ? (
+                <Badge 
+                  badgeContent={item.badge} 
+                  color="error"
+                  sx={{
+                    "& .MuiBadge-badge": {
+                      fontSize: "0.65rem",
+                      height: "18px",
+                      minWidth: "18px",
+                      fontWeight: 700,
+                    }
+                  }}
+                />
+              ) : null}
               sx={{
-                color: isDark ? "#f1f5f9" : "white",
-                borderColor: isDark ? "#f1f5f9" : "white",
+                justifyContent: "flex-start",
                 textTransform: "none",
+                fontSize: "0.95rem",
                 fontWeight: 600,
-                display: { xs: "none", sm: "flex" },
+                color: "white",
+                p: 1.5,
+                borderRadius: 1,
                 "&:hover": {
-                  bgcolor: isDark ? "rgba(241, 245, 249, 0.1)" : "rgba(255, 255, 255, 0.2)",
+                  background: "rgba(255,255,255,0.15)",
                 },
               }}
-              startIcon={<LogoutIcon />}
             >
-              Logout
+              {item.label}
             </Button>
+          ))}
+        </Stack>
 
-            {/* Mobile Menu Button */}
-            <IconButton sx={{ display: { xs: "flex", md: "none" }, color: isDark ? "#f1f5f9" : "white" }} onClick={() => setMobileOpen(true)}>
-              <MenuIcon />
-            </IconButton>
-          </Box>
-        </Toolbar>
-      </AppBar>
+        <Divider sx={{ borderColor: "rgba(255,255,255,0.1)" }} />
 
-      {/* Mobile Drawer */}
-      <Drawer anchor="right" open={mobileOpen} onClose={() => setMobileOpen(false)}>
-        <Box sx={{ width: 250, p: 2 }}>
-          <Typography variant="h6" fontWeight={700} sx={{ mb: 2 }}>
-            DBIT Canteen
-          </Typography>
+        {/* Footer - Theme & Logout */}
+        <Stack spacing={1} sx={{ p: 2 }}>
+          <IconButton
+            onClick={toggleTheme}
+            sx={{
+              color: "white",
+              justifyContent: "flex-start",
+              p: 1.5,
+              borderRadius: 1,
+              "&:hover": { background: "rgba(255,255,255,0.15)" },
+            }}
+            title={isDark ? "Light mode" : "Dark mode"}
+          >
+            {isDark ? <Brightness7Icon /> : <Brightness4Icon />}
+          </IconButton>
 
-          <List>
-            {navItems.map((item) => (
-              <ListItemButton 
-                key={item.label} 
-                component={Link} 
-                to={item.to} 
-                onClick={() => setMobileOpen(false)}
-              >
-                <ListItemText
-                  primary={
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                      {item.label}
-                      {item.cartCount > 0 && (
-                        <ShoppingCartIcon fontSize="small" />
-                      )}
-                    </Box>
-                  }
-                />
-              </ListItemButton>
-            ))}
-
-            <ListItemButton onClick={handleLogout}>
-              <LogoutIcon fontSize="small" /> &nbsp; Logout
-            </ListItemButton>
-          </List>
-        </Box>
+          <Button
+            onClick={handleLogout}
+            startIcon={<LogoutIcon />}
+            sx={{
+              justifyContent: "flex-start",
+              textTransform: "none",
+              fontSize: "0.95rem",
+              fontWeight: 600,
+              color: "white",
+              p: 1.5,
+              borderRadius: 1,
+              "&:hover": { background: "rgba(239, 68, 68, 0.3)" },
+            }}
+          >
+            Logout
+          </Button>
+        </Stack>
       </Drawer>
     </>
   );
 }
+
+export { DRAWER_WIDTH, COLLAPSED_WIDTH };

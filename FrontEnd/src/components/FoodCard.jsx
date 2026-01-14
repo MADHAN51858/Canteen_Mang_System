@@ -52,6 +52,8 @@
 
 
 
+// import { useContext, useState } from "react";
+// import { CartContext } from "../context/CartContext";
 import { useContext, useState } from "react";
 import { CartContext } from "../context/CartContext";
 import { post, postForm } from "../utils/api";
@@ -74,8 +76,7 @@ export default function FoodCard({ item, onAdd, onRemove, onUpdate }) {
   const { user, cart, increaseQuantity, decreaseQuantity } = useContext(CartContext);
   const rv = String((user && user.role) || "").toLowerCase();
 
-  // Check if item is in cart and get its quantity
-  const cartItem = cart.find(i => i._id === item._id);
+  const cartItem = cart.find((i) => i._id === item._id);
   const inCart = !!cartItem;
   const quantity = cartItem?.quantity || 0;
 
@@ -95,23 +96,21 @@ export default function FoodCard({ item, onAdd, onRemove, onUpdate }) {
     setLoading(true);
     setMsg("");
     try {
-      // send multipart/form-data (supports image upload)
-  const fd = new FormData();
-  fd.append('id', item._id);
-  fd.append('itemname', form.itemname);
-  fd.append('price', String(form.price));
-  fd.append('category', form.category);
-  fd.append('stock', String(form.stock ?? 0));
-  if (file) fd.append('image', file);
-  const res = await postForm('/food/updateItem', fd);
+      const fd = new FormData();
+      fd.append("id", item._id);
+      fd.append("itemname", form.itemname);
+      fd.append("price", String(form.price));
+      fd.append("category", form.category);
+      fd.append("stock", String(form.stock ?? 0));
+      if (file) fd.append("image", file);
+
+      const res = await postForm("/food/updateItem", fd);
       if (res?.status === 200 || res?.success) {
-        // res.data contains updated item
         if (typeof onUpdate === "function") onUpdate(res.data);
-        // fallback: if parent passed onRemove for name changes, it's still preserved
         setMsg("Updated");
         setEditing(false);
       } else {
-        setMsg(res.message || "Failed to update");
+        setMsg(res?.message || "Failed to update");
       }
     } catch (e) {
       console.log(e);
@@ -132,81 +131,128 @@ export default function FoodCard({ item, onAdd, onRemove, onUpdate }) {
     }
   }
 
-  const isAdmin = rv.includes("admin");
+  const isAdmin = rv.includes("admin") || rv.includes("staff");
   const isStudent = rv.includes("student");
   const currentCartQty = cartItem?.quantity || 0;
   const remaining = Math.max(0, Number(item.stock || 0) - currentCartQty);
 
   return (
     <Card
-      elevation={2}
+      elevation={0}
       sx={{
         display: "flex",
-        flexDirection: { xs: "column", sm: "row" },
-        p: 2,
-        gap: 2,
-        borderRadius: 3,
-        alignItems: { xs: "flex-start", sm: "center" },
+        flexDirection: "column",
+        p: 0,
+        borderRadius: "16px",
         bgcolor: "background.paper",
         transition: "all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
-        border: "1px solid",
-        borderColor: "divider",
+        border: "none",
+        overflow: "hidden",
+        position: "relative",
+        width: "100%",
+        // height: "460px",
+        boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
         "&:hover": {
-          transform: "translateY(-6px)",
-          boxShadow: (theme) => theme.shadows[8],
-          borderColor: "primary.main",
+          transform: "translateY(-12px)",
+          boxShadow: "0 16px 48px rgba(0,0,0,0.16)",
         },
-        height: "100%",
       }}
     >
-      {/* Image */}
+      {/* Premium Badge */}
+      <Box
+        sx={{
+          position: "absolute",
+          top: 12,
+          right: 12,
+          zIndex: 10,
+          bgcolor: "success.main",
+          color: "white",
+          px: 1.5,
+          py: 0.5,
+          borderRadius: "20px",
+          fontSize: "0.75rem",
+          fontWeight: 800,
+          textTransform: "uppercase",
+        }}
+      >
+        Fresh
+      </Box>
+
+      {/* Image Container */}
       <Tooltip title={item.itemname} placement="top">
-        <CardMedia
-          component="img"
-          image={preview || item.image || "https://via.placeholder.com/100?text=" + item.itemname}
-          alt={item.itemname}
+        <Box
           sx={{
-            width: { xs: "100%", sm: 100 },
-            height: 100,
-            borderRadius: 2,
-            objectFit: "cover",
-            border: "2px solid",
-            borderColor: "primary.light",
+            position: "relative",
+            width: "100%",
+            height: 160,
+            overflow: "hidden",
+            bgcolor: "#f0f0f0",
           }}
-        />
+        >
+          <CardMedia
+            component="img"
+            image={preview || item.image || "https://via.placeholder.com/280x160?text=" + item.itemname}
+            alt={item.itemname}
+            sx={{
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+            }}
+          />
+        </Box>
       </Tooltip>
 
-      {/* Content */}
-      <CardContent sx={{ flex: 1, p: "0!important", display: "flex", flexDirection: "column", gap: 0.5 }}>
+      {/* Content Container */}
+      <CardContent sx={{ flex: 1, display: "flex", flexDirection: "column", gap: 0.75, p: 1.5, pb: 0.75 }}>
         {!editing ? (
           <>
-            <Typography variant="subtitle1" fontWeight={700} sx={{ fontSize: { xs: "0.95rem", sm: "1rem" } }}>
-              {item.itemname}
-            </Typography>
-            <Typography
-              variant="body2"
-              sx={{
-                color: "success.main",
-                fontWeight: 700,
-                fontSize: "1.1rem",
-              }}
-            >
-              ₹{item.price}
-            </Typography>
-            {item.inStock !== undefined && (
-              <Typography
-                variant="caption"
-                sx={{
-                  color: item.inStock ? "success.main" : "error.main",
-                  fontWeight: 600,
-                }}
-              >
-                {item.inStock ? `✓ In Stock (${remaining} left)` : "Out of Stock"}
+            <Box>
+              <Typography variant="h6" fontWeight={800} sx={{ lineHeight: 1.2, fontSize: "1rem", minHeight: 28 }}>
+                {item.itemname}
               </Typography>
-            )}
+            </Box>
+
+            <Typography variant="body2" color="text.secondary" sx={{ minHeight: 36, fontSize: "0.85rem", lineHeight: 1.3 }}>
+              {item.description || "Tasty and freshly prepared."}
+            </Typography>
+
+            <Box sx={{ py: 0.5 }}>
+              <Stack direction="row" spacing={1.5} alignItems="center" justifyContent="space-between">
+                <Box>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.7rem" }}>
+                    Price
+                  </Typography>
+                  <Typography
+                    variant="h5"
+                    sx={{
+                      color: "success.main",
+                      fontWeight: 900,
+                      fontSize: "1.35rem",
+                    }}
+                  >
+                    ₹{item.price}
+                  </Typography>
+                </Box>
+                <Box sx={{ textAlign: "right" }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ fontSize: "0.7rem" }}>
+                    Left
+                  </Typography>
+                  <Typography
+                    variant="body2"
+                    sx={{
+                      color: remaining > 0 ? "success.main" : "error.main",
+                      fontWeight: 800,
+                      fontSize: "0.9rem",
+                    }}
+                  >
+                    {remaining > 0 ? remaining : "Out"}
+                  </Typography>
+                </Box>
+              </Stack>
+            </Box>
           </>
         ) : (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          <Box sx={{ display: "flex", flexDirection: "column", gap: 0.75 }}>
             <TextField
               label="Name"
               value={form.itemname}
@@ -221,24 +267,18 @@ export default function FoodCard({ item, onAdd, onRemove, onUpdate }) {
               size="small"
               fullWidth
             />
-            {/* <TextField
+            <TextField
+              select
+              fullWidth
               label="Category"
               value={form.category}
               onChange={(e) => setForm((s) => ({ ...s, category: e.target.value }))}
               size="small"
-              fullWidth
-            /> */}
-              <TextField
-            select
-            fullWidth
-            label="Category"
-            value={form.category}
-            onChange={(e) => setForm((s) => ({ ...s, category: e.target.value }))}
-          >
-            <MenuItem value="BreakFast">BreakFast</MenuItem>
-            <MenuItem value="Lunch">Lunch</MenuItem>
-            <MenuItem value="dinner">Dinner</MenuItem>
-          </TextField>
+            >
+              <MenuItem value="BreakFast">BreakFast</MenuItem>
+              <MenuItem value="Lunch">Lunch</MenuItem>
+              <MenuItem value="dinner">Dinner</MenuItem>
+            </TextField>
             <Box>
               <input
                 id={`file-${item._id}`}
@@ -249,10 +289,9 @@ export default function FoodCard({ item, onAdd, onRemove, onUpdate }) {
                   setFile(f);
                   if (f) setPreview(URL.createObjectURL(f));
                 }}
-                style={{ marginTop: 6 }}
+                style={{ marginTop: 4 }}
               />
             </Box>
-            {/* In Stock is derived from stock; checkbox removed */}
             <TextField
               label="Stock"
               type="number"
@@ -267,161 +306,175 @@ export default function FoodCard({ item, onAdd, onRemove, onUpdate }) {
         )}
       </CardContent>
 
-      {/* Actions */}
-      <Stack direction={{ xs: "row", sm: "column" }} gap={1} sx={{ flexShrink: 0 }}>
-        {isAdmin && (
-          <>
-            {!editing ? (
-              <>
-                <Tooltip title="Remove from menu">
+      {/* Actions Container */}
+      <Box sx={{ p: 1.25, pt: 0.75, borderTop: "1px solid", borderColor: "divider" }}>
+        <Stack direction="row" spacing={0.75} sx={{ width: "100%" }}>
+          {isAdmin && (
+            <>
+              {!editing ? (
+                <>
+                  <Tooltip title="Remove from menu">
+                    <Button
+                      variant="outlined"
+                      color="error"
+                      size="small"
+                      onClick={() => removeMenuItem(item.itemname)}
+                      startIcon={<DeleteIcon />}
+                      sx={{
+                        fontWeight: 700,
+                        textTransform: "none",
+                        borderRadius: "8px",
+                        whiteSpace: "nowrap",
+                        flex: 1,
+                        fontSize: "0.8rem",
+                        p: 0.75,
+                      }}
+                    >
+                      Remove
+                    </Button>
+                  </Tooltip>
                   <Button
-                    variant="outlined"
-                    color="error"
+                    variant="contained"
+                    color="primary"
                     size="small"
-                    onClick={() => removeMenuItem(item.itemname)}
-                    startIcon={<DeleteIcon />}
+                    onClick={() => setEditing(true)}
                     sx={{
-                      fontWeight: 600,
+                      fontWeight: 700,
                       textTransform: "none",
-                      borderRadius: 2,
+                      borderRadius: "8px",
                       whiteSpace: "nowrap",
+                      flex: 1,
+                      fontSize: "0.8rem",
+                      p: 0.75,
                     }}
                   >
-                    Remove
+                    Edit
                   </Button>
-                </Tooltip>
-                <Button
-                  variant="outlined"
-                  color="primary"
-                  size="small"
-                  onClick={() => setEditing(true)}
-                  sx={{
-                    fontWeight: 600,
-                    textTransform: "none",
-                    borderRadius: 2,
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  Edit
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button
-                  variant="contained"
-                  color="primary"
-                  size="small"
-                  onClick={updateItem}
-                  disabled={loading}
-                  sx={{ fontWeight: 600, textTransform: "none", borderRadius: 2 }}
-                >
-                  {loading ? "Saving..." : "Save"}
-                </Button>
-                <Button
-                  variant="outlined"
-                  color="inherit"
-                  size="small"
-                  onClick={() => {
-                    setEditing(false);
-                    setForm({ itemname: item.itemname, price: item.price, category: item.category || "", stock: Number(item.stock || 0) });
-                    setMsg("");
-                  }}
-                  sx={{ fontWeight: 600, textTransform: "none", borderRadius: 2 }}
-                >
-                  Cancel
-                </Button>
-              </>
-            )}
-          </>
-        )}
-        {isStudent && (
-          <>
-            {!inCart ? (
-              <Tooltip title="Add to cart">
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="contained"
+                    color="success"
+                    size="small"
+                    onClick={updateItem}
+                    disabled={loading}
+                    fullWidth
+                    sx={{ fontWeight: 700, textTransform: "none", borderRadius: "8px", p: 0.75 }}
+                  >
+                    {loading ? "Saving..." : "Save"}
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    color="inherit"
+                    size="small"
+                    onClick={() => {
+                      setEditing(false);
+                      setForm({ itemname: item.itemname, price: item.price, category: item.category || "", stock: Number(item.stock || 0) });
+                      setMsg("");
+                    }}
+                    fullWidth
+                    sx={{ fontWeight: 700, textTransform: "none", borderRadius: "8px", p: 0.75 }}
+                  >
+                    Cancel
+                  </Button>
+                </>
+              )}
+            </>
+          )}
+
+          {isStudent && (
+            <>
+              {!inCart ? (
                 <Button
                   variant="contained"
                   color="primary"
+                  fullWidth
                   size="small"
                   onClick={() => onAdd(item)}
                   disabled={Number(item.stock || 0) <= 0}
                   startIcon={<AddShoppingCartIcon />}
                   sx={{
-                    fontWeight: 600,
+                    fontWeight: 800,
                     textTransform: "none",
-                    borderRadius: 2,
-                    whiteSpace: "nowrap",
+                    borderRadius: "8px",
+                    fontSize: "0.85rem",
+                    p: 0.75,
                   }}
                 >
-                  {Number(item.stock || 0) > 0 ? "Add" : "Out of Stock"}
+                  {Number(item.stock || 0) > 0 ? "Add" : "Out"}
                 </Button>
-              </Tooltip>
-            ) : (
-              <Box 
-                sx={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: 1,
-                  bgcolor: 'primary.light',
-                  borderRadius: 2,
-                  p: 0.5
-                }}
-              >
-                <Button
-                  variant="contained"
-                  size="small"
-                  onClick={() => decreaseQuantity(item._id)}
+              ) : (
+                <Box
                   sx={{
-                    minWidth: 32,
-                    width: 32,
-                    height: 32,
-                    p: 0,
-                    bgcolor: 'white',
-                    color: 'primary.main',
-                    fontWeight: 700,
-                    fontSize: '1.2rem',
-                    '&:hover': {
-                      bgcolor: 'grey.100',
-                    },
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 0.5,
+                    bgcolor: "primary.light",
+                    borderRadius: "8px",
+                    p: 0.5,
+                    flex: 1,
                   }}
                 >
-                  −
-                </Button>
-                <Typography 
-                  sx={{ 
-                    minWidth: 24, 
-                    textAlign: 'center', 
-                    fontWeight: 700,
-                    color: 'white'
-                  }}
-                >
-                  {quantity}
-                </Typography>
-                <Button
-                  variant="contained"
-                  size="small"
-                  onClick={() => increaseQuantity(item._id)}
-                  disabled={remaining <= 0}
-                  sx={{
-                    minWidth: 32,
-                    width: 32,
-                    height: 32,
-                    p: 0,
-                    bgcolor: 'white',
-                    color: 'primary.main',
-                    fontWeight: 700,
-                    fontSize: '1.2rem',
-                    '&:hover': {
-                      bgcolor: 'grey.100',
-                    },
-                  }}
-                >
-                  +
-                </Button>
-              </Box>
-            )}
-          </>
-        )}
-      </Stack>
+                  <Button
+                    variant="text"
+                    size="small"
+                    onClick={() => decreaseQuantity(item._id)}
+                    sx={{
+                      minWidth: 28,
+                      width: 28,
+                      height: 28,
+                      p: 0,
+                      bgcolor: "white",
+                      color: "primary.main",
+                      fontWeight: 900,
+                      fontSize: "1rem",
+                      "&:hover": {
+                        bgcolor: "grey.200",
+                      },
+                    }}
+                  >
+                    −
+                  </Button>
+                  <Typography
+                    sx={{
+                      minWidth: 28,
+                      textAlign: "center",
+                      fontWeight: 900,
+                      color: "white",
+                      fontSize: "0.9rem",
+                    }}
+                  >
+                    {quantity}
+                  </Typography>
+                  <Button
+                    variant="text"
+                    size="small"
+                    onClick={() => increaseQuantity(item._id)}
+                    disabled={remaining <= 0}
+                    sx={{
+                      minWidth: 28,
+                      width: 28,
+                      height: 28,
+                      p: 0,
+                      bgcolor: "white",
+                      color: "primary.main",
+                      fontWeight: 900,
+                      fontSize: "1rem",
+                      "&:hover": {
+                        bgcolor: "grey.200",
+                      },
+                    }}
+                  >
+                    +
+                  </Button>
+                </Box>
+              )}
+            </>
+          )}
+        </Stack>
+      </Box>
     </Card>
   );
 }

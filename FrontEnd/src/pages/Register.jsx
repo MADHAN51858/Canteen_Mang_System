@@ -16,12 +16,18 @@ import {
   Container,
   Divider,
   InputAdornment,
+  Grid,
+  useTheme,
+  useMediaQuery,
 } from "@mui/material";
 import PersonIcon from "@mui/icons-material/Person";
 import EmailIcon from "@mui/icons-material/Email";
 import LockIcon from "@mui/icons-material/Lock";
 import PhoneIcon from "@mui/icons-material/Phone";
 import BadgeIcon from "@mui/icons-material/Badge";
+import RestaurantIcon from "@mui/icons-material/Restaurant";
+import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
+import LocalOfferIcon from "@mui/icons-material/LocalOffer";
 
 export default function Register() {
   const [form, setForm] = useState({
@@ -69,205 +75,301 @@ export default function Register() {
     <Box
       sx={{
         minHeight: "100vh",
+        background: "#f5f5f5",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-        p: { xs: 2, sm: 3 },
+        py: { xs: 4, md: 0 },
       }}
     >
       <Container maxWidth="sm">
         <Paper
-          elevation={6}
+          elevation={1}
           sx={{
-            p: { xs: 3, sm: 4 },
-            borderRadius: 3,
-            backdropFilter: "blur(10px)",
+            p: { xs: 3, sm: 5 },
+            borderRadius: 2,
+            background: "#ffffff",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
           }}
         >
           {/* Header */}
-          <Box sx={{ textAlign: "center", mb: 3 }}>
-            <Typography variant="h4" fontWeight={800} sx={{ color: "primary.main", mb: 1 }}>
-              Join DBIT Canteen
+          <Box sx={{ textAlign: "center", mb: 4 }}>
+            <Typography
+              variant="h4"
+              fontWeight={700}
+              sx={{
+                mb: 1,
+                color: "#1a1a1a",
+              }}
+            >
+              Create Account
             </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Create your account to order delicious food
+            <Typography
+              variant="body2"
+              sx={{
+                color: "#666666",
+              }}
+            >
+              Join DBIT Canteen to start ordering
             </Typography>
           </Box>
 
-          <Divider sx={{ mb: 3 }} />
-
-          <Stack spacing={2.5}>
-            {/* Username */}
-            <TextField
-              label="Username"
-              value={form.username}
-              onChange={(e) => handleChange("username", e.target.value)}
-              fullWidth
-              variant="outlined"
-              size="small"
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <PersonIcon fontSize="small" sx={{ color: "primary.main", mr: 0.5 }} />
-                  </InputAdornment>
-                ),
-              }}
-              sx={{
-                "& .MuiOutlinedInput-root": {
-                  borderRadius: 2,
-                  transition: "all 0.3s",
-                  "&:focus-within": {
-                    boxShadow: (theme) => `0 0 0 3px ${theme.palette.primary.light}33`,
-                  },
-                },
-              }}
-            />
-
-            {/* Email */}
-            <TextField
-              label="Email Address"
-              type="email"
-              value={form.email}
-              onChange={(e) => handleChange("email", e.target.value)}
-              fullWidth
-              variant="outlined"
-              size="small"
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <EmailIcon fontSize="small" sx={{ color: "primary.main", mr: 0.5 }} />
-                  </InputAdornment>
-                ),
-              }}
-              sx={{
-                "& .MuiOutlinedInput-root": {
-                  borderRadius: 2,
-                  "&:focus-within": {
-                    boxShadow: (theme) => `0 0 0 3px ${theme.palette.primary.light}33`,
-                  },
-                },
-              }}
-            />
-
-            {/* Password */}
-            <TextField
-              label="Password"
-              type="password"
-              value={form.password}
-              onChange={(e) => handleChange("password", e.target.value)}
-              fullWidth
-              variant="outlined"
-              size="small"
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <LockIcon fontSize="small" sx={{ color: "primary.main", mr: 0.5 }} />
-                  </InputAdornment>
-                ),
-              }}
-              sx={{
-                "& .MuiOutlinedInput-root": {
-                  borderRadius: 2,
-                  "&:focus-within": {
-                    boxShadow: (theme) => `0 0 0 3px ${theme.palette.primary.light}33`,
-                  },
-                },
-              }}
-            />
-
-            <Divider sx={{ my: 1 }} />
-
-            {/* Roll No */}
-            <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-              <TextField
-                label="Roll No / ID"
-                value={form.rollNo}
-                onChange={(e) => handleChange("rollNo", e.target.value)}
-                fullWidth
-                variant="outlined"
-                size="small"
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <BadgeIcon fontSize="small" sx={{ color: "primary.main", mr: 0.5 }} />
-                    </InputAdornment>
-                  ),
-                }}
-                sx={{
-                  "& .MuiOutlinedInput-root": {
-                    borderRadius: 2,
-                  },
-                }}
-              />
-            </Stack>
-
-            {/* Phone */}
-            <TextField
-              label="Phone Number"
-              value={form.phoneNo}
-              onChange={(e) => handleChange("phoneNo", e.target.value)}
-              fullWidth
-              variant="outlined"
-              size="small"
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <PhoneIcon fontSize="small" sx={{ color: "primary.main", mr: 0.5 }} />
-                  </InputAdornment>
-                ),
-              }}
-              sx={{
-                "& .MuiOutlinedInput-root": {
-                  borderRadius: 2,
-                },
-              }}
-            />
-
-            {/* Register Button */}
-            <Button
-              variant="contained"
-              size="large"
-              onClick={handleRegister}
-              disabled={loading}
-              fullWidth
-              sx={{
-                py: 1.3,
-                fontSize: "1rem",
-                fontWeight: 700,
-                borderRadius: 2,
-                textTransform: "none",
-                transition: "all 0.3s",
-                "&:hover": {
-                  transform: "translateY(-2px)",
-                  boxShadow: (theme) => `0 8px 16px ${theme.palette.primary.main}33`,
-                },
-              }}
-            >
-              {loading ? "Creating Account..." : "Create Account"}
-            </Button>
-
-            {/* Login Link */}
-            <Typography variant="body2" textAlign="center" sx={{ mt: 2 }}>
-              Already have an account?{" "}
-              <Link
-                component={RouterLink}
-                to="/login"
-                underline="none"
-                sx={{
-                  fontWeight: 700,
-                  color: "primary.main",
-                  "&:hover": {
-                    textDecoration: "underline",
-                  },
-                }}
-              >
-                Login Here
-              </Link>
-            </Typography>
-          </Stack>
+          <FormContent
+            form={form}
+            loading={loading}
+            handleChange={handleChange}
+            handleRegister={handleRegister}
+          />
         </Paper>
       </Container>
     </Box>
+  );
+}
+
+function FormContent({ form, loading, handleChange, handleRegister }) {
+  return (
+    <>
+    
+
+      <Divider sx={{ mb: 3 }} />
+
+      <Stack spacing={2.5}>
+        {/* Username */}
+        <TextField
+          label="Username"
+          value={form.username}
+          onChange={(e) => handleChange("username", e.target.value)}
+          fullWidth
+          variant="outlined"
+          size="small"
+          autoComplete="off"
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <PersonIcon sx={{ color: "#999999", mr: 0.5, fontSize: 20 }} />
+              </InputAdornment>
+            ),
+          }}
+          sx={{
+            "& .MuiOutlinedInput-root": {
+              background: "#fafafa",
+              borderRadius: 1,
+              "& fieldset": {
+                borderColor: "#e0e0e0",
+              },
+              "&:hover fieldset": {
+                borderColor: "#cccccc",
+              },
+              "&.Mui-focused fieldset": {
+                borderColor: "#1976d2",
+              },
+            },
+            "& .MuiOutlinedInput-input": {
+              color: "#1a1a1a",
+              caretColor: "#1976d2",
+            },
+          }}
+        />
+
+        {/* Email */}
+        <TextField
+          label="Email"
+          type="email"
+          value={form.email}
+          onChange={(e) => handleChange("email", e.target.value)}
+          fullWidth
+          variant="outlined"
+          size="small"
+          autoComplete="off"
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <EmailIcon sx={{ color: "#999999", mr: 0.5, fontSize: 20 }} />
+              </InputAdornment>
+            ),
+          }}
+          sx={{
+            "& .MuiOutlinedInput-root": {
+              background: "#fafafa",
+              borderRadius: 1,
+              "& fieldset": {
+                borderColor: "#e0e0e0",
+              },
+              "&:hover fieldset": {
+                borderColor: "#cccccc",
+              },
+              "&.Mui-focused fieldset": {
+                borderColor: "#1976d2",
+              },
+            },
+            "& .MuiOutlinedInput-input": {
+              color: "#1a1a1a",
+              caretColor: "#1976d2",
+            },
+          }}
+        />
+
+        {/* Password */}
+        <TextField
+          label="Password"
+          type="password"
+          value={form.password}
+          onChange={(e) => handleChange("password", e.target.value)}
+          fullWidth
+          variant="outlined"
+          size="small"
+          autoComplete="new-password"
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <LockIcon sx={{ color: "#999999", mr: 0.5, fontSize: 20 }} />
+              </InputAdornment>
+            ),
+          }}
+          sx={{
+            "& .MuiOutlinedInput-root": {
+              background: "#fafafa",
+              borderRadius: 1,
+              "& fieldset": {
+                borderColor: "#e0e0e0",
+              },
+              "&:hover fieldset": {
+                borderColor: "#cccccc",
+              },
+              "&.Mui-focused fieldset": {
+                borderColor: "#1976d2",
+              },
+            },
+            "& .MuiOutlinedInput-input": {
+              color: "#1a1a1a",
+              caretColor: "#1976d2",
+            },
+          }}
+        />
+
+        {/* Roll No */}
+        <TextField
+          label="Roll No"
+          value={form.rollNo}
+          onChange={(e) => handleChange("rollNo", e.target.value)}
+          fullWidth
+          variant="outlined"
+          size="small"
+          autoComplete="off"
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <BadgeIcon sx={{ color: "#999999", mr: 0.5, fontSize: 20 }} />
+              </InputAdornment>
+            ),
+          }}
+          sx={{
+            "& .MuiOutlinedInput-root": {
+              background: "#fafafa",
+              borderRadius: 1,
+              "& fieldset": {
+                borderColor: "#e0e0e0",
+              },
+              "&:hover fieldset": {
+                borderColor: "#cccccc",
+              },
+              "&.Mui-focused fieldset": {
+                borderColor: "#1976d2",
+              },
+            },
+            "& .MuiOutlinedInput-input": {
+              color: "#1a1a1a",
+              caretColor: "#1976d2",
+            },
+          }}
+        />
+
+        {/* Phone */}
+        <TextField
+          label="Phone"
+          value={form.phoneNo}
+          onChange={(e) => handleChange("phoneNo", e.target.value)}
+          fullWidth
+          variant="outlined"
+          size="small"
+          autoComplete="off"
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <PhoneIcon sx={{ color: "#999999", mr: 0.5, fontSize: 20 }} />
+              </InputAdornment>
+            ),
+          }}
+          sx={{
+            "& .MuiOutlinedInput-root": {
+              background: "#fafafa",
+              borderRadius: 1,
+              "& fieldset": {
+                borderColor: "#e0e0e0",
+              },
+              "&:hover fieldset": {
+                borderColor: "#cccccc",
+              },
+              "&.Mui-focused fieldset": {
+                borderColor: "#1976d2",
+              },
+            },
+            "& .MuiOutlinedInput-input": {
+              color: "#1a1a1a",
+              caretColor: "#1976d2",
+            },
+          }}
+        />
+
+        {/* Register Button */}
+        <Button
+          variant="contained"
+          size="medium"
+          onClick={handleRegister}
+          disabled={loading}
+          fullWidth
+          sx={{
+            py: 1.2,
+            fontSize: "0.95rem",
+            fontWeight: 600,
+            borderRadius: 1,
+            textTransform: "none",
+            transition: "all 0.2s",
+            marginTop: 1,
+            background: "#1976d2",
+            "&:hover:not(:disabled)": {
+              background: "#1565c0",
+            },
+            "&:disabled": {
+              background: "#cccccc",
+            },
+          }}
+        >
+          {loading ? "Creating Account..." : "Sign Up"}
+        </Button>
+
+        {/* Login Link */}
+        <Box sx={{ textAlign: "center" }}>
+          <Typography variant="body2" sx={{ color: "#666666" }}>
+            Already have an account?{" "}
+            <Link
+              component={RouterLink}
+              to="/login"
+              underline="none"
+              sx={{
+                color: "#1976d2",
+                fontWeight: 600,
+                transition: "all 0.2s",
+                "&:hover": {
+                  color: "#1565c0",
+                },
+              }}
+            >
+              Sign in
+            </Link>
+          </Typography>
+        </Box>
+      </Stack>
+    </>
   );
 }

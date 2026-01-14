@@ -18,6 +18,7 @@ import {
     addMoneyToWallet,
     deductFromWallet,
     updateProfile,
+    withdrawAmount,
 } from "../controllers/user.controller.js"
 import { verifyJwt } from "../middlewares/auth.middleware.js"
 
@@ -29,6 +30,7 @@ router.route("/logout").post(verifyJwt, logout)
 router.route("/getMe").get(verifyJwt, getMe)
 router.route("/updateRole").post(verifyJwt, updateUserRole)
 router.route("/updateProfile").post(verifyJwt, updateProfile)
+router.route("/withdrawAmount").post(verifyJwt, withdrawAmount)
 router.route("/toggleBlockUser").post(verifyJwt, toggleBlockUser)
 router.route("/deleteUser").post(verifyJwt, deleteUser)
 router.route("/addFriends").post(verifyJwt,addFriends)

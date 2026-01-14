@@ -88,8 +88,10 @@ export default function OrdersAdmin() {
       const status = String(order.status || "").toLowerCase();
       const isCancelled = status === "cancelled" || status === "canceled";
       const isCompleted = status === "completed";
+      const isPreparing = status === "preparing";
 
-      if (tab === "pre") return order.pre === true && !isCancelled && !isCompleted; // pre-orders, exclude cancelled and completed
+      if (tab === "pre") return order.pre === true && !isCancelled && !isCompleted && !isPreparing; // pre-orders, exclude cancelled, completed, and preparing
+      if (tab === "preparing") return isPreparing && order.pre === true; // only preparing pre-orders
       if (tab === "normal") return isCancelled && order.pre === true; // only cancelled pre-orders
       if (tab === "completed") return isCompleted && order.pre === true; // only completed pre-orders
       return true;
@@ -242,7 +244,7 @@ export default function OrdersAdmin() {
     const label = s.charAt(0).toUpperCase() + s.slice(1);
     if (s === "delivered") return <Chip label={label} color="success" size="small" />;
     if (s === "preparing") return <Chip label={label} color="warning" size="small" />;
-    if (s === "canceled") return <Chip label={label} color="error" size="small" />;
+    if (s === "canceled" || s === "cancelled") return <Chip label={label} size="small" sx={{ bgcolor: "#ef4444", color: "white" }} />;
     if (s === "completed") return <Chip label={label} color="success" size="small" />;
     return <Chip label={label} color="primary" size="small" />;
   };
@@ -328,9 +330,7 @@ export default function OrdersAdmin() {
     <Box sx={{ minHeight: "100vh", bgcolor: "background.default", pb: 6 }}>
       <AppBar position="sticky" color="inherit" sx={{ borderBottom: 1, borderColor: "divider" }}>
         <Toolbar sx={{ gap: 2 }}>
-          <Typography variant="h6" sx={{ flexGrow: 1, fontWeight: 700 }}>
-            Admin — Orders
-          </Typography>
+       
 
           <Tabs
             value={activeTab}
@@ -342,9 +342,9 @@ export default function OrdersAdmin() {
             indicatorColor="primary"
             sx={{ minHeight: 36, height: 36 }}
           >
-            <Tab value="pre" label="Pre-orders" sx={{ minHeight: 36, height: 36 }} />
-            <Tab value="normal" label="Cancelled orders" sx={{ minHeight: 36, height: 36 }} />
-            <Tab value="completed" label="Completed orders" sx={{ minHeight: 36, height: 36 }} />
+            {/* <Tab value="pre" label="Pre-orders" sx={{ minHeight: 36, height: 36 }} />
+            <Tab value="normal" label="Cancelled orders" sx={{ minHeight: 36, height: 36 }} /> */}
+            {/* <Tab value="completed" label="Completed orders" sx={{ minHeight: 36, height: 36 }} /> */}
           </Tabs>
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -363,6 +363,12 @@ export default function OrdersAdmin() {
 
       <Container maxWidth="lg" sx={{ mt: 4 }}>
         <Paper elevation={0} sx={{ height: "72vh", display: "flex", flexDirection: "column", p: 1 }}>
+          <Tabs value={activeTab} onChange={(e, val) => setActiveTab(val)} sx={{ borderBottom: 1, borderColor: "divider", mb: 1 }}>
+            <Tab label="New-Orders" value="pre" />
+            <Tab label="Preparing" value="preparing" />
+            <Tab label="Completed" value="completed" />
+            <Tab label="Cancelled" value="normal" />
+          </Tabs>
           <DataGrid
             rows={rows}
             columns={columns}

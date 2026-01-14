@@ -31,6 +31,11 @@ const foodSchema = new Schema(
             required: true,
             min: 0,
             default: 0
+        },
+        description: {
+            type: String,
+            trim: true,
+            default: ""
         }
 
     })
