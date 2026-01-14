@@ -11,6 +11,7 @@ import {
   Stack,
   Skeleton,
   Button,
+  Card,
 } from "@mui/material";
 import RestaurantMenuIcon from "@mui/icons-material/RestaurantMenu";
 import RefreshIcon from "@mui/icons-material/Refresh";
@@ -220,14 +221,48 @@ export default function Menu() {
 
         {/* Loading State */}
         {loading && (
-          <Grid container spacing={2}>
-            {Array.from({ length: 8 }).map((_, i) => (
-              <Grid item xs={12} sm={6} md={3} key={i}>
-                <Paper sx={{ p: 2, borderRadius: 3 }}>
-                  <Skeleton variant="rectangular" height={100} sx={{ borderRadius: 2, mb: 1 }} />
-                  <Skeleton variant="text" />
-                  <Skeleton variant="text" width="60%" />
-                </Paper>
+          <Grid container spacing={4}>
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Grid item xs={12} sm={6} md={4} lg={3} key={i}>
+                <Card
+                  elevation={0}
+                  sx={{
+                    p: 0,
+                    borderRadius: 3,
+                    overflow: "hidden",
+                    boxShadow: "0 4px 20px rgba(0,0,0,0.08)",
+                    display: "flex",
+                    flexDirection: "column",
+                  }}
+                >
+                  <Box sx={{ position: "relative", height: 160, bgcolor: "#f3f4f6" }}>
+                    <Skeleton variant="rectangular" width="100%" height="100%" />
+                  </Box>
+
+                  <Box sx={{ p: 1.5, display: "flex", flexDirection: "column", gap: 1 }}>
+                    <Skeleton variant="text" height={24} width="80%" />
+                    <Skeleton variant="text" height={18} width="95%" />
+                    <Skeleton variant="text" height={18} width="70%" />
+
+                    <Stack direction="row" justifyContent="space-between" spacing={1}>
+                      <Box sx={{ flex: 1 }}>
+                        <Skeleton variant="text" height={16} width={60} />
+                        <Skeleton variant="text" height={28} width={90} />
+                      </Box>
+                      <Box sx={{ textAlign: "right", flex: 1 }}>
+                        <Skeleton variant="text" height={16} width={50} sx={{ ml: "auto" }} />
+                        <Skeleton variant="text" height={22} width={60} sx={{ ml: "auto" }} />
+                      </Box>
+                    </Stack>
+                  </Box>
+
+                  <Box sx={{ px: 1.25, pb: 1.25, pt: 0.5 }}>
+                    <Stack direction="row" spacing={1}>
+                      <Skeleton variant="rectangular" height={36} sx={{ borderRadius: 1, flex: 1 }} />
+                      <Skeleton variant="rectangular" height={36} sx={{ borderRadius: 1, flex: 1 }} />
+                    </Stack>
+                  </Box>
+                </Card>
               </Grid>
             ))}
           </Grid>

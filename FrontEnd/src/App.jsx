@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, useLocation, useNavigate  } from "react-router-dom";
-import { Box } from "@mui/material";
+import { Box, Fab, Badge } from "@mui/material";
+import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import Menu from "./pages/Menu";
 import Cart from "./pages/Cart";
 import Login from "./pages/Login";
@@ -20,6 +21,8 @@ import AdminHeader, { DRAWER_WIDTH, COLLAPSED_WIDTH, useDrawerState as useAdminD
 import StaffHeader, { useDrawerState as useStaffDrawerState } from "./components/StaffHeader";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { setOnUnauthorized } from "./utils/api";
+
+// const COLLAPSED_WIDTH = 72; // Width when sidebar is collapsed
 
 function HeaderSelector(){
   const location = useLocation();
@@ -57,7 +60,8 @@ function AuthHandler() {
 
 function AppContent() {
   const location = useLocation();
-  const { user } = useContext(CartContext);
+  const navigate = useNavigate();
+  const { user, cart } = useContext(CartContext);
   const role = user?.role;
   const isAdmin = user && String(role || '').toLowerCase().includes('admin');
   const isStaff = user && String(role || '').toLowerCase().includes('staff');
@@ -71,7 +75,15 @@ function AppContent() {
   const studentDrawerOpen = useStudentDrawerState();
   const drawerOpen = isAdmin ? adminDrawerOpen : isStaff ? staffDrawerOpen : isStudent ? studentDrawerOpen : false;
   
-  const currentDrawerWidth = showSidebar && drawerOpen ? DRAWER_WIDTH : 0;
+  const currentDrawerWidth = showSidebar 
+    ? (drawerOpen ? DRAWER_WIDTH : COLLAPSED_WIDTH)
+    : 0;
+
+  // Calculate total cart items
+  const cartItemCount = cart?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0;
+
+  // Show floating cart only for students and not on cart page
+  const showFloatingCart = isStudent && location.pathname !== '/student/cart' && location.pathname !== '/login' && location.pathname !== '/';
 
   return (
     <>
@@ -104,6 +116,48 @@ function AppContent() {
           </Routes>
         </Box>
       </Box>
+
+      {/* Floating Cart Button for Students */}
+      {showFloatingCart && (
+        <Fab
+          color="primary"
+          aria-label="cart"
+          onClick={() => navigate('/student/cart')}
+          sx={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            width: 64,
+            height: 64,
+            background: 'linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)',
+            boxShadow: '0 8px 24px rgba(30,64,175,0.35)',
+            transition: 'all 0.3s ease',
+            zIndex: 1000,
+            '&:hover': {
+              transform: 'scale(1.1) translateY(-4px)',
+              boxShadow: '0 12px 32px rgba(30,64,175,0.45)',
+              background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)',
+            },
+          }}
+        >
+          <Badge
+            badgeContent={cartItemCount}
+            color="error"
+            sx={{
+              '& .MuiBadge-badge': {
+                fontSize: '0.85rem',
+                fontWeight: 800,
+                minWidth: 24,
+                height: 24,
+                borderRadius: '12px',
+                border: '2px solid white',
+              },
+            }}
+          >
+            <ShoppingCartIcon sx={{ fontSize: 32, color: 'white' }} />
+          </Badge>
+        </Fab>
+      )}
     </>
   );
 }

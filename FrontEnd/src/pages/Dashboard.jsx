@@ -15,6 +15,7 @@ import {
   Stack,
   TextField,
   Button,
+  Skeleton,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -316,7 +317,202 @@ export default function Dashboard() {
   };
 
   if (loading) {
-    return <Container maxWidth="lg" sx={{ py: 4 }}></Container>;
+    return (
+      <Container maxWidth="lg" sx={{ py: 4 }}>
+        <Grid container spacing={3} >
+          {/* Profile Skeleton */}
+          <Grid item xs={12} width="100%">
+            <Card
+              sx={{
+                borderRadius: 3,
+                p: 3,
+                background: "linear-gradient(135deg, #1e40af, #3b82f6)",
+                color: "white",
+                boxShadow: "0 12px 40px rgba(30,64,175,0.2)",
+                width: "100%",
+              }}
+            >
+              <Grid container spacing={3} alignItems="center">
+                <Grid item xs={12} sm={4}>
+                  <Stack direction="row" spacing={2} alignItems="center">
+                    <Skeleton
+                      variant="circular"
+                      width={72}
+                      height={72}
+                      sx={{ bgcolor: "rgba(255,255,255,0.2)" }}
+                    />
+                    <Stack spacing={1} sx={{ flex: 1 }}>
+                      <Skeleton
+                        variant="text"
+                        width={200}
+                        height={28}
+                        sx={{ bgcolor: "rgba(255,255,255,0.25)" }}
+                      />
+                      <Skeleton
+                        variant="text"
+                        width={140}
+                        height={20}
+                        sx={{ bgcolor: "rgba(255,255,255,0.2)" }}
+                      />
+                    </Stack>
+                  </Stack>
+                </Grid>
+
+                <Grid item xs={12} sm={4}>
+                  <Stack spacing={1.5} sx={{ width: "100%" }}>
+                    <Skeleton
+                      variant="rectangular"
+                      width="100%"
+                      height={32}
+                      sx={{ borderRadius: 2, bgcolor: "rgba(255,255,255,0.2)" }}
+                    />
+                    <Skeleton
+                      variant="rectangular"
+                      width="100%"
+                      height={32}
+                      sx={{ borderRadius: 2, bgcolor: "rgba(255,255,255,0.2)" }}
+                    />
+                    <Skeleton
+                      variant="rectangular"
+                      width="100%"
+                      height={32}
+                      sx={{ borderRadius: 2, bgcolor: "rgba(255,255,255,0.2)" }}
+                    />
+                  </Stack>
+                </Grid>
+
+                <Grid item xs={12} sm={4}>
+                  <Stack spacing={1.5} sx={{ width: "100%" }}>
+                    <Skeleton
+                      variant="rectangular"
+                      width="100%"
+                      height={44}
+                      sx={{ borderRadius: 2, bgcolor: "rgba(255,255,255,0.2)" }}
+                    />
+                    <Skeleton
+                      variant="rectangular"
+                      width="100%"
+                      height={44}
+                      sx={{ borderRadius: 2, bgcolor: "rgba(255,255,255,0.2)" }}
+                    />
+                  </Stack>
+                </Grid>
+              </Grid>
+            </Card>
+          </Grid>
+
+          {/* Stat Cards Skeletons */}
+          {Array.from({ length: 5 }).map((_, idx) => (
+            <Grid item xs={12} sm={6} md={4} key={`stat-skel-${idx}`}>
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 2.5,
+                  borderRadius: 2,
+                  bgcolor: "white",
+                  border: "1px solid #e2e8f0",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                }}
+              >
+                <Skeleton variant="text" width={120} height={20} sx={{ mb: 1 }} />
+                <Skeleton variant="text" width={80} height={32} />
+                <Skeleton
+                  variant="rectangular"
+                  width="100%"
+                  height={8}
+                  sx={{ mt: 2, borderRadius: 10 }}
+                />
+              </Paper>
+            </Grid>
+          ))}
+
+          {/* Section Title Skeleton */}
+          <Grid item xs={12} sx={{ my: 10 }}>
+          </Grid>
+
+          {/* Pie Charts Skeletons */}
+          {Array.from({ length: 4 }).map((_, idx) => (
+            <Grid item xs={12} md={4} key={`pie-skel-${idx}`}>
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 2.5,
+                  borderRadius: 2,
+                  bgcolor: "white",
+                  border: "1px solid #e2e8f0",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                  minHeight: 340,
+                }}
+              >
+                <Skeleton variant="text" width={200} height={24} sx={{ mb: 2 }} />
+                <Box
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    height: 260,
+                  }}
+                >
+                  <Skeleton
+                    variant="circular"
+                    width={200}
+                    height={200}
+                    sx={{ borderRadius: "50%" }}
+                  />
+                </Box>
+              </Paper>
+            </Grid>
+          ))}
+
+          {/* Toggle buttons skeleton */}
+          {/* <Grid item xs={12}>
+            <Stack direction="row" spacing={2}>
+              <Skeleton variant="rectangular" width={140} height={40} sx={{ borderRadius: 2 }} />
+              <Skeleton variant="rectangular" width={160} height={40} sx={{ borderRadius: 2 }} />
+            </Stack>
+          </Grid> */}
+
+          {/* Full Width Comparison Chart Skeleton */}
+          {/* <Grid item xs={12}>
+            <Paper
+              elevation={0}
+              sx={{
+                p: 2.5,
+                borderRadius: 2,
+                bgcolor: "white",
+                border: "1px solid #e2e8f0",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                minHeight: 360,
+              }}
+            >
+              <Skeleton variant="text" width={260} height={26} sx={{ mb: 2 }} />
+              <Skeleton variant="rectangular" width="100%" height={280} sx={{ borderRadius: 2 }} />
+            </Paper>
+          </Grid> */}
+
+          {/* Category Growth Charts Skeletons */}
+          {Array.from({ length: 4 }).map((_, idx) => (
+            <Grid item xs={12} md={4} key={`growth-skel-${idx}`}>
+              <Paper
+                elevation={0}
+                sx={{
+                  mt: 3,
+                  p: 3.8,
+                  borderRadius: 2,
+                  bgcolor: "white",
+                  border: "1px solid #e2e8f0",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                  minHeight: 320,
+                }}
+              >
+                <Skeleton variant="text" width={180} height={24} sx={{ mb: 2 }} />
+                <Skeleton variant="rectangular" width="100%" height={240} sx={{ borderRadius: 2 }} />
+              </Paper>
+            </Grid>
+          ))}
+        </Grid>
+      </Container>
+    );
   }
 
   return (

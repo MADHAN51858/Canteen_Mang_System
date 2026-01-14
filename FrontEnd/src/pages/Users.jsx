@@ -10,7 +10,7 @@ import {
   Button,
   Chip,
   Grid,
-  CircularProgress,
+  Skeleton,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -137,23 +137,6 @@ export default function Users() {
     }
   };
 
-  if (loading) {
-    return (
-      <Container
-        maxWidth="lg"
-        sx={{
-          py: 6,
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          minHeight: "60vh",
-        }}
-      >
-        <CircularProgress />
-      </Container>
-    );
-  }
-
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "#f8fafc" }}>
       {/* Hero Header */}
@@ -212,7 +195,108 @@ export default function Users() {
           </Stack>
         </Stack>
 
-        {users.length === 0 ? (
+        {loading ? (
+          <Grid container spacing={2.5}>
+            {Array.from({ length: 6 }).map((_, idx) => (
+              <Grid item xs={12} sm={6} md={6} key={idx}>
+                <Card
+                  sx={{
+                    borderRadius: 3,
+                    p: 2.5,
+                    background: "white",
+                    border: "1px solid #e2e8f0",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                  }}
+                >
+                  <Stack spacing={1.5}>
+                    <Box>
+                      <Skeleton variant="text" width="60%" height={28} sx={{ mb: 0.5 }} />
+                      <Skeleton variant="rectangular" width={80} height={24} sx={{ borderRadius: 999 }} />
+                    </Box>
+
+                    <Grid container spacing={1.25}>
+                      <Grid item xs={12}>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            gap: 1.25,
+                            p: 1.5,
+                            borderRadius: 2,
+                            bgcolor: "#f8fafc",
+                            border: "1px solid #e2e8f0",
+                          }}
+                        >
+                          <Skeleton variant="circular" width={20} height={20} />
+                          <Box sx={{ flex: 1 }}>
+                            <Skeleton variant="text" width={60} height={14} sx={{ mb: 0.5 }} />
+                            <Skeleton variant="text" width="85%" height={18} />
+                          </Box>
+                        </Box>
+                      </Grid>
+                    </Grid>
+
+                    <Grid container spacing={1.25}>
+                      {Array.from({ length: 2 }).map((_, i) => (
+                        <Grid item xs={12} sm={6} key={i}>
+                          <Box
+                            sx={{
+                              display: "flex",
+                              gap: 1.25,
+                              p: 1.5,
+                              borderRadius: 2,
+                              bgcolor: "#f8fafc",
+                              border: "1px solid #e2e8f0",
+                            }}
+                          >
+                            <Skeleton variant="circular" width={20} height={20} />
+                            <Box sx={{ flex: 1 }}>
+                              <Skeleton variant="text" width={60} height={14} sx={{ mb: 0.5 }} />
+                              <Skeleton variant="text" width="70%" height={18} />
+                            </Box>
+                          </Box>
+                        </Grid>
+                      ))}
+                    </Grid>
+
+                    <Grid container spacing={1.25}>
+                      {Array.from({ length: 2 }).map((_, i) => (
+                        <Grid item xs={12} sm={6} key={i}>
+                          <Box
+                            sx={{
+                              display: "flex",
+                              gap: 1.25,
+                              p: 1.5,
+                              borderRadius: 2,
+                              bgcolor: "#f8fafc",
+                              border: "1px solid #e2e8f0",
+                            }}
+                          >
+                            <Skeleton variant="circular" width={20} height={20} />
+                            <Box sx={{ flex: 1 }}>
+                              <Skeleton variant="text" width={80} height={14} sx={{ mb: 0.5 }} />
+                              <Skeleton variant="text" width="50%" height={18} />
+                            </Box>
+                          </Box>
+                        </Grid>
+                      ))}
+                    </Grid>
+                  </Stack>
+
+                  <Stack spacing={1} sx={{ mt: 2.5 }}>
+                    <Stack direction="row" spacing={1}>
+                      <Skeleton variant="rectangular" height={36} sx={{ flex: 1, borderRadius: 2 }} />
+                      <Skeleton variant="rectangular" height={36} sx={{ flex: 1, borderRadius: 2 }} />
+                    </Stack>
+                    <Stack direction="row" spacing={1}>
+                      <Skeleton variant="rectangular" height={36} sx={{ flex: 1, borderRadius: 2 }} />
+                      <Skeleton variant="rectangular" height={36} sx={{ flex: 1, borderRadius: 2 }} />
+                    </Stack>
+                  </Stack>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        ) : users.length === 0 ? (
           <Card sx={{ p: 4, textAlign: "center", borderRadius: 3 }}>
             <Typography variant="h6" sx={{ color: "#94a3b8" }}>
               No users found in the system.

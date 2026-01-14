@@ -320,14 +320,79 @@ export default function OrdersDashboard() {
         {loading && orders.length === 0 ? (
           // show skeleton grid while initially loading
           <Grid container spacing={2}>
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Grid item xs={12} sm={6} md={4} key={i}>
-                <Card>
-                  <CardContent>
-                    <Skeleton variant="text" width="60%" height={28} />
-                    <Skeleton variant="text" width="40%" />
-                    <Skeleton variant="rectangular" height={60} sx={{ mt: 1 }} />
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Grid item xs={12} sm={6} md={4} key={i} width="32%">
+                <Card
+                  sx={{
+                    borderRadius: 3,
+                    background: "white",
+                    border: "1px solid #e2e8f0",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                    overflow: "hidden",
+                    
+                  }}
+                >
+                  {/* Status Banner Skeleton */}
+                  <Box
+                    sx={{
+                      py: 1,
+                      px: 2,
+                      background: "linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%)",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Skeleton variant="text" width={100} height={28} sx={{ bgcolor: "rgba(255,255,255,0.5)" }} />
+                    <Skeleton variant="rectangular" width={80} height={24} sx={{ borderRadius: 999, bgcolor: "rgba(255,255,255,0.5)" }} />
+                  </Box>
+
+                  <CardContent sx={{ p: 2.5 }}>
+                    <Stack spacing={2}>
+                      {/* Placed By Skeleton */}
+                      <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: "#f1f5f9", border: "1px solid #cbd5e1" }}>
+                        <Skeleton variant="text" width={80} height={14} sx={{ mb: 0.5 }} />
+                        <Skeleton variant="text" width={120} height={20} />
+                      </Box>
+
+                      {/* Items List Skeleton */}
+                      <Box sx={{ p: 2, borderRadius: 2, bgcolor: "#f0f9ff", border: "1px solid #bfdbfe" }}>
+                        <Skeleton variant="text" width={100} height={14} sx={{ mb: 1 }} />
+                        <Stack spacing={0.75}>
+                          {Array.from({ length: 3 }).map((_, idx) => (
+                            <Box
+                              key={idx}
+                              sx={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                py: 0.5,
+                              }}
+                            >
+                              <Skeleton variant="text" width="50%" height={18} />
+                              <Stack direction="row" spacing={1} alignItems="center">
+                                <Skeleton variant="rectangular" width={30} height={20} sx={{ borderRadius: 999 }} />
+                                <Skeleton variant="text" width={50} height={18} />
+                              </Stack>
+                            </Box>
+                          ))}
+                        </Stack>
+                      </Box>
+
+                      {/* Stats Grid Skeleton */}
+                      <Grid container spacing={1.5}>
+                        {Array.from({ length: 3 }).map((_, idx) => (
+                          <Grid item xs={4} key={idx}>
+                            <Box sx={{ p: 0.5, borderRadius: 2, bgcolor: "#f8fafc", border: "1px solid #e2e8f0", textAlign: "center" }}>
+                              <Skeleton variant="text" width={40} height={12} sx={{ mx: "auto", mb: 0.5 }} />
+                              <Skeleton variant="text" width={50} height={24} sx={{ mx: "auto" }} />
+                            </Box>
+                          </Grid>
+                        ))}
+                      </Grid>
+                    </Stack>
                   </CardContent>
+
                 </Card>
               </Grid>
             ))}

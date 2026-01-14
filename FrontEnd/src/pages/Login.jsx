@@ -12,13 +12,17 @@ import {
   Paper,
   InputAdornment,
   Container,
+  IconButton,
 } from "@mui/material";
 import PersonIcon from "@mui/icons-material/Person";
 import LockIcon from "@mui/icons-material/Lock";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 
 export default function Login() {
   const [credential, setCredential] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
   const { login } = useContext(CartContext);
   const { showToast } = useToast();
@@ -142,7 +146,7 @@ export default function Login() {
           {/* Password */}
           <TextField
             label="Password"
-            type="password"
+            type={showPassword ? "text" : "password"}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             fullWidth
@@ -153,6 +157,18 @@ export default function Login() {
               startAdornment: (
                 <InputAdornment position="start">
                   <LockIcon sx={{ color: "#999999", mr: 0.5, fontSize: 20 }} />
+                </InputAdornment>
+              ),
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    onClick={() => setShowPassword(!showPassword)}
+                    edge="end"
+                    size="small"
+                    sx={{ color: "#999999" }}
+                  >
+                    {showPassword ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                  </IconButton>
                 </InputAdornment>
               ),
             }}

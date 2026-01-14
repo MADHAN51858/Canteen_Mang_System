@@ -19,12 +19,15 @@ import {
   Grid,
   useTheme,
   useMediaQuery,
+  IconButton,
 } from "@mui/material";
 import PersonIcon from "@mui/icons-material/Person";
 import EmailIcon from "@mui/icons-material/Email";
 import LockIcon from "@mui/icons-material/Lock";
 import PhoneIcon from "@mui/icons-material/Phone";
 import BadgeIcon from "@mui/icons-material/Badge";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import RestaurantIcon from "@mui/icons-material/Restaurant";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import LocalOfferIcon from "@mui/icons-material/LocalOffer";
@@ -127,6 +130,8 @@ export default function Register() {
 }
 
 function FormContent({ form, loading, handleChange, handleRegister }) {
+  const [showPassword, setShowPassword] = useState(false);
+
   return (
     <>
     
@@ -212,7 +217,7 @@ function FormContent({ form, loading, handleChange, handleRegister }) {
         {/* Password */}
         <TextField
           label="Password"
-          type="password"
+          type={showPassword ? "text" : "password"}
           value={form.password}
           onChange={(e) => handleChange("password", e.target.value)}
           fullWidth
@@ -223,6 +228,18 @@ function FormContent({ form, loading, handleChange, handleRegister }) {
             startAdornment: (
               <InputAdornment position="start">
                 <LockIcon sx={{ color: "#999999", mr: 0.5, fontSize: 20 }} />
+              </InputAdornment>
+            ),
+            endAdornment: (
+              <InputAdornment position="end">
+                <IconButton
+                  onClick={() => setShowPassword(!showPassword)}
+                  edge="end"
+                  size="small"
+                  sx={{ color: "#999999" }}
+                >
+                  {showPassword ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                </IconButton>
               </InputAdornment>
             ),
           }}

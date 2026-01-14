@@ -19,6 +19,7 @@ import {
   Container,
   Paper,
   Grid,
+  Skeleton,
 } from "@mui/material";
 import PersonIcon from "@mui/icons-material/Person";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
@@ -42,6 +43,7 @@ export default function UserProfile() {
   const [addAmount, setAddAmount] = useState("");
   const [addSaving, setAddSaving] = useState(false);
   const [addError, setAddError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (user) {
@@ -50,6 +52,10 @@ export default function UserProfile() {
       setPhoneNo(String(user.phoneNo || ""));
       setRollNo(user.rollNo || "");
       fetchOrderCounts();
+      // Simulate loading delay
+      setTimeout(() => setLoading(false), 500);
+    } else {
+      setLoading(false);
     }
   }, [user]);
 
@@ -234,9 +240,109 @@ export default function UserProfile() {
           </Stack>
         </Stack>
 
-        <Grid container spacing={3} alignItems="center">
-          {/* Wallet Card */}
-          <Grid item xs={12} sm={6} lg={3}>
+        {loading ? (
+          <Grid container spacing={3}>
+            {/* Wallet Skeleton */}
+            <Grid item xs={12} sm={6} lg={3}>
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 3,
+                  borderRadius: 3,
+                  background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                  boxShadow: "0 8px 24px rgba(16,185,129,0.25)",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                }}
+              >
+                <Stack spacing={2}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Skeleton variant="circular" width={32} height={32} sx={{ bgcolor: "rgba(255,255,255,0.2)" }} />
+                    <Skeleton variant="text" width={140} height={24} sx={{ bgcolor: "rgba(255,255,255,0.25)" }} />
+                  </Stack>
+                  <Skeleton variant="text" width={180} height={56} sx={{ bgcolor: "rgba(255,255,255,0.25)" }} />
+                  <Skeleton variant="rectangular" width="100%" height={36} sx={{ borderRadius: 1, bgcolor: "rgba(255,255,255,0.25)" }} />
+                </Stack>
+              </Paper>
+            </Grid>
+
+            {/* Profile Details Skeleton */}
+            <Grid item xs={12} sm={6} lg={9}>
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 3,
+                  borderRadius: 3,
+                  background: "white",
+                  border: "1px solid #e2e8f0",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                }}
+              >
+                <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
+                  <Skeleton variant="text" width={180} height={32} />
+                  <Skeleton variant="rectangular" width={80} height={36} sx={{ borderRadius: 1 }} />
+                </Stack>
+
+                <Grid container spacing={3}>
+                  {Array.from({ length: 4 }).map((_, idx) => (
+                    <Grid item xs={12} sm={idx < 2 ? 6 : 12} key={idx}>
+                      <Box
+                        sx={{
+                          p: 2.5,
+                          borderRadius: 2,
+                          bgcolor: "#f8fafc",
+                          border: "1px solid #e2e8f0",
+                        }}
+                      >
+                        <Skeleton variant="text" width={100} height={16} sx={{ mb: 1 }} />
+                        <Skeleton variant="text" width={idx < 2 ? "60%" : "80%"} height={28} />
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
+            </Grid>
+
+            {/* Order Statistics Skeleton */}
+            <Grid item xs={12}>
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 3,
+                  borderRadius: 3,
+                  background: "white",
+                  border: "1px solid #e2e8f0",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                }}
+              >
+                <Skeleton variant="text" width={180} height={32} sx={{ mb: 3 }} />
+                <Grid container spacing={2}>
+                  {Array.from({ length: 4 }).map((_, idx) => (
+                    <Grid item xs={12} sm={6} md={3} key={idx}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          p: 3,
+                          borderRadius: 2,
+                          bgcolor: "#f8fafc",
+                          border: "1px solid #e2e8f0",
+                        }}
+                      >
+                        <Skeleton variant="text" width={100} height={20} sx={{ mb: 1 }} />
+                        <Skeleton variant="text" width={60} height={48} />
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Paper>
+            </Grid>
+          </Grid>
+        ) : (
+          <Grid container spacing={3} alignItems="center">
+            {/* Wallet Card */}
+            <Grid item xs={12} sm={6} lg={3}>
             <Paper
               elevation={0}
               sx={{
@@ -658,6 +764,7 @@ export default function UserProfile() {
             </Paper>
           </Grid>
         </Grid>
+        )}
       </Container>
 
       {/* Add Money Dialog */}
