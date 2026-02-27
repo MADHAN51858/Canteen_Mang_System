@@ -1,8 +1,11 @@
 import express from "express"
 import cors from "cors"
+import path from "path"
 import cookieParser from "cookie-parser"
 import dotenv from "dotenv";
 dotenv.config();
+
+const __dirname = path.resolve()
 
 const app = express()
 
@@ -10,7 +13,8 @@ app.use(cors({
   origin: [
     // process.env.CORS_ORIGIN,
     "https://canteen-mang-system-1.onrender.com",
-    "http://localhost:5173"
+    "http://localhost:5173",
+    "http://localhost:3000"
   ].filter(Boolean),
   methods: ["GET", "POST", "PUT", "DELETE"],
    allowedHeaders: ["Content-Type", "Authorization"],
@@ -19,7 +23,8 @@ app.use(cors({
 
 app.use(express.json({limit: "16kb"}))
 app.use(express.urlencoded({extended: true, limit: "16kb"}))
-app.use(express.static("public"))
+
+// app.use(express.static("public"))
 app.use(cookieParser())
 
 // Dummy payment endpoint for cart
@@ -44,4 +49,8 @@ app.use("/users", userRouter)
 app.use("/food", foodRouter)
 app.use("/order", order)
 
+app.use(express.static(path.join(__dirname, "public")))
+app.use((req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 export { app }
