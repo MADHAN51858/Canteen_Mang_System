@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const BASE = import.meta.env.VITE_API_BASE_URL?.trim() || (import.meta.env.DEV ? 'http://localhost:3000' : '');
+const BASE = "https://canteen-mang-system.onrender.com";
+// const BASE = "http://localhost:3000";
 
 // Configure axios with credentials
 axios.defaults.withCredentials = true;
