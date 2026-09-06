@@ -263,19 +263,39 @@ const getUserOrderList = asyncHandler(async (req, res) => {
     .populate("items", "itemname price image category")
     .sort({ createdAt: -1 });
 
-  return res.status(200).json(new ApiResponse(200, orders, "Successfully fetched user orders"));
+  const ordersWithUser = orders.map((order) => {
+    const obj = order.toObject();
+    obj.user = { username: user.username, avatar: user.avatar, rollNo: user.rollNo };
+    return obj;
+  });
+
+  return res.status(200).json(new ApiResponse(200, ordersWithUser, "Successfully fetched user orders"));
 });
 
 const getOrderList = asyncHandler(async (req, res) => {
-  const orders = await Order.find();
+  const orders = await Order.find()
+    .populate("items", "itemname price image category")
+    .sort({ createdAt: -1 });
 
   if (!orders) {
     throw new ApiError(400, "No orders till now");
   }
 
+  // Fetch user profiles for all unique orderedBy usernames
+  const usernames = [...new Set(orders.map((o) => o.orderedBy).filter(Boolean))];
+  const users = await User.find({ username: { $in: usernames } }).select("username avatar rollNo");
+  const userMap = new Map(users.map((u) => [String(u.username).toLowerCase(), u]));
+
+  const ordersWithUser = orders.map((order) => {
+    const u = userMap.get(String(order.orderedBy).toLowerCase());
+    const obj = order.toObject();
+    obj.user = u ? { username: u.username, avatar: u.avatar, rollNo: u.rollNo } : null;
+    return obj;
+  });
+
   return res
     .status(200)
-    .json(new ApiResponse(200, orders, "Succesfull Fetched orders"));
+    .json(new ApiResponse(200, ordersWithUser, "Succesfull Fetched orders"));
 });
 
 const markPreparing = asyncHandler(async (req, res) => {
@@ -657,4 +677,105 @@ const getOrderStatusStats = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, result, "Order status stats fetched"));
 });
 
-export { createOrder, getOrderList, getUserOrderList, markCompleteByBarcode, markPreparing, getDailyOrderStats, getCategoryFoodStats, getCategoryCrossStats, getCategoryRevenueStats, getCategoryFoodRevenueStats, getOrderStats, getOrderStatusStats };
+const getOrderGraphCards = asyncHandler(async (req, res) => {
+  // Generate dates for the last 7 days (YYYY-MM-DD)
+  const last7Days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const dateStr = d.toISOString().slice(0, 10);
+    last7Days.push(dateStr);
+  }
+
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - 6);
+  startDate.setHours(0, 0, 0, 0);
+
+  // Group orders by status and date from the last 7 days
+  const stats = await Order.aggregate([
+    { $match: { createdAt: { $gte: startDate } } },
+    {
+      $group: {
+        _id: {
+          date: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          status: "$status",
+        },
+        count: { $sum: 1 },
+      },
+    },
+  ]);
+
+  // Overall totals from the database
+  const statusTotals = await Order.aggregate([
+    {
+      $group: {
+        _id: "$status",
+        total: { $sum: 1 },
+      },
+    },
+  ]);
+
+  const totalsMap = {};
+  statusTotals.forEach((s) => {
+    totalsMap[String(s._id).toLowerCase()] = s.total;
+  });
+
+  const pendingTotal = totalsMap["pending"] || 0;
+  const preparingTotal = totalsMap["preparing"] || 0;
+  const completedTotal = totalsMap["completed"] || 0;
+  const cancelledTotal = totalsMap["cancelled"] || 0;
+  const activeTotal = pendingTotal + preparingTotal;
+
+  // Build daily trend arrays for each card
+  const trendMap = {};
+  stats.forEach((s) => {
+    const key = `${s._id.date}_${String(s._id.status).toLowerCase()}`;
+    trendMap[key] = s.count;
+  });
+
+  const pendingTrend = last7Days.map((d) => trendMap[`${d}_pending`] || 0);
+  const preparingTrend = last7Days.map((d) => trendMap[`${d}_preparing`] || 0);
+  const completedTrend = last7Days.map((d) => trendMap[`${d}_completed`] || 0);
+  const cancelledTrend = last7Days.map((d) => trendMap[`${d}_cancelled`] || 0);
+
+  const activeTrend = last7Days.map((d) => {
+    const p = trendMap[`${d}_pending`] || 0;
+    const pr = trendMap[`${d}_preparing`] || 0;
+    return p + pr;
+  });
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        pending: { count: pendingTotal, trend: pendingTrend },
+        preparing: { count: preparingTotal, trend: preparingTrend },
+        completed: { count: completedTotal, trend: completedTrend },
+        cancelled: { count: cancelledTotal, trend: cancelledTrend },
+        active: { count: activeTotal, trend: activeTrend },
+        unfulfilled: { count: pendingTotal, trend: pendingTrend },
+        pendingReceipt: { count: preparingTotal, trend: preparingTrend },
+        fulfilled: { count: completedTotal, trend: completedTrend },
+        days: last7Days,
+      },
+      "Real order graph cards statistics fetched"
+    )
+  );
+});
+
+export {
+  createOrder,
+  getOrderList,
+  getUserOrderList,
+  markCompleteByBarcode,
+  markPreparing,
+  getDailyOrderStats,
+  getCategoryFoodStats,
+  getCategoryCrossStats,
+  getCategoryRevenueStats,
+  getCategoryFoodRevenueStats,
+  getOrderStats,
+  getOrderStatusStats,
+  getOrderGraphCards,
+};
+

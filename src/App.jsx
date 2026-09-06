@@ -1,12 +1,9 @@
-import { BrowserRouter, Routes, Route, useLocation, useNavigate  } from "react-router-dom";
-import { Box, Fab, Badge } from "@mui/material";
-import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
+import { BrowserRouter, Routes, Route, useLocation, useNavigate, Navigate } from "react-router-dom";
+import { Box } from "@mui/material";
 import Menu from "./pages/Menu";
-import Cart from "./pages/Cart";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import ForgotPassword from "./pages/ForgotPassword";
-import UserOrders from "./pages/UserOrders";
 import Orders from "./pages/Orders";
 import Friends from "./pages/Friends";
 import Profile from "./pages/Profile";
@@ -17,6 +14,7 @@ import Header, { DRAWER_WIDTH, COLLAPSED_WIDTH, useDrawerState } from "./compone
 import Toast from "./components/Toast";
 import { CartProvider, CartContext } from "./context/CartContext";
 import { ToastProvider } from "./context/ToastContext";
+import { SnackbarProvider } from "./context/SnackbarContext";
 import { useContext, useEffect, useState } from "react";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { setOnUnauthorized } from "./utils/api";
@@ -51,9 +49,7 @@ function AuthHandler() {
 function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, cart } = useContext(CartContext);
-  const role = user?.role;
-  const isStudent = user && String(role || '').toLowerCase().includes('student');
+  const { user } = useContext(CartContext);
   const isAuthPage = ['/login', '/', '/forgot-password'].includes(location.pathname);
   const showSidebar = Boolean(user && user.role) && !isAuthPage;
   
@@ -62,12 +58,6 @@ function AppContent() {
   const currentDrawerWidth = showSidebar 
     ? (drawerOpen ? DRAWER_WIDTH : COLLAPSED_WIDTH)
     : 0;
-
-  // Calculate total cart items
-  const cartItemCount = cart?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0;
-
-  // Show floating cart only for students and not on cart or auth pages
-  const showFloatingCart = isStudent && location.pathname !== '/student/cart' && !isAuthPage;
 
   return (
     <>
@@ -82,15 +72,16 @@ function AppContent() {
             transition: 'width 0.3s ease'
           }} 
         />
-        <Box sx={{ flex: 1 }}>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
           <Routes>
             <Route path="/student/menu" element={<ProtectedRoute requiredRole="student"><Menu /></ProtectedRoute>} />
             <Route path="/admin/menu" element={<ProtectedRoute allowedRoles={["admin", "staff"]}><Menu /></ProtectedRoute>} />
-            <Route path="/student/cart" element={<ProtectedRoute requiredRole="student"><Cart /></ProtectedRoute>} />
+            <Route path="/student/cart" element={<Navigate to="/student/menu" replace />} />
+            <Route path="/cart" element={<Navigate to="/student/menu" replace />} />
             <Route path="/login" element={<Login />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/" element={<Register />} />
-            <Route path="/student/orders" element={<ProtectedRoute requiredRole="student"><UserOrders /></ProtectedRoute>} />
+            <Route path="/student/orders" element={<ProtectedRoute requiredRole="student"><Orders /></ProtectedRoute>} />
             <Route path="/admin/orders" element={<ProtectedRoute allowedRoles={["admin", "staff"]}><Orders /></ProtectedRoute>} />
             <Route path="/student/wallet" element={<ProtectedRoute requiredRole="student"><Friends /></ProtectedRoute>} />
             <Route path="/student/profile" element={<ProtectedRoute allowedRoles={["student", "admin", "staff"]}><Profile /></ProtectedRoute>} />
@@ -98,52 +89,10 @@ function AppContent() {
             <Route path="/product-entry" element={<ProtectedRoute allowedRoles={["admin", "staff"]}><Admin /></ProtectedRoute>} />
             <Route path="/admin/users" element={<ProtectedRoute allowedRoles={["admin", "staff"]}><Users /></ProtectedRoute>} />
             <Route path="/admin/dashboard" element={<ProtectedRoute allowedRoles={["admin", "staff"]}><Dashboard /></ProtectedRoute>} />
-            <Route path="/student" element={<ProtectedRoute requiredRole="student"></ProtectedRoute>} />
+            <Route path="/student" element={<ProtectedRoute requiredRole="student"><Navigate to="/student/menu" replace /></ProtectedRoute>} />
           </Routes>
         </Box>
       </Box>
-
-      {/* Floating Cart Button for Students */}
-      {showFloatingCart && (
-        <Fab
-          color="primary"
-          aria-label="cart"
-          onClick={() => navigate('/student/cart')}
-          sx={{
-            position: 'fixed',
-            bottom: 24,
-            right: 24,
-            width: 64,
-            height: 64,
-            background: 'linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)',
-            boxShadow: '0 8px 24px rgba(30,64,175,0.35)',
-            transition: 'all 0.3s ease',
-            zIndex: 1000,
-            '&:hover': {
-              transform: 'scale(1.1) translateY(-4px)',
-              boxShadow: '0 12px 32px rgba(30,64,175,0.45)',
-              background: 'linear-gradient(135deg, #1e3a8a 0%, #2563eb 100%)',
-            },
-          }}
-        >
-          <Badge
-            badgeContent={cartItemCount}
-            color="error"
-            sx={{
-              '& .MuiBadge-badge': {
-                fontSize: '0.85rem',
-                fontWeight: 800,
-                minWidth: 24,
-                height: 24,
-                borderRadius: '12px',
-                border: '2px solid white',
-              },
-            }}
-          >
-            <ShoppingCartIcon sx={{ fontSize: 32, color: 'white' }} />
-          </Badge>
-        </Fab>
-      )}
     </>
   );
 }
@@ -151,11 +100,13 @@ function AppContent() {
 function App() {
   return (
     <BrowserRouter>
-      <ToastProvider>
-        <CartProvider>
-          <AppContent />
-        </CartProvider>
-      </ToastProvider>
+      <SnackbarProvider>
+        <ToastProvider>
+          <CartProvider>
+            <AppContent />
+          </CartProvider>
+        </ToastProvider>
+      </SnackbarProvider>
     </BrowserRouter>
   );
 }

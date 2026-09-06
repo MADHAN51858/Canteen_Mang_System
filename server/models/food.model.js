@@ -19,11 +19,11 @@ const foodSchema = new Schema(
         },
         category: {
             type: String,
-            enum: ["BreakFast", "Lunch", "dinner"],
-            required: true
+            required: true,
+            trim: true
         },
         inStock: {
-            type : Boolean,
+            type: Boolean,
             default: true
         },
         stock: {
@@ -32,12 +32,23 @@ const foodSchema = new Schema(
             min: 0,
             default: 0
         },
+        offer: {
+            type: Number,
+            min: 0,
+            max: 100,
+            default: 0
+        },
+        isVeg: {
+            type: Boolean,
+            default: true
+        },
         description: {
             type: String,
             trim: true,
             default: ""
         }
+    },
+    { timestamps: true }
+);
 
-    })
-
-export const Food = mongoose.model("Food", foodSchema)
+export const Food = mongoose.model("Food", foodSchema);

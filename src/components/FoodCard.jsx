@@ -10,6 +10,7 @@
 import { useContext, useState } from "react";
 import { CartContext } from "../context/CartContext";
 import { post, postForm } from "../utils/api";
+import { useSnackbar } from "../hooks/useSnackbar";
 import {
   Card,
   CardMedia,
@@ -31,6 +32,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 
 export default function FoodCard({ item, onAdd, onRemove, onUpdate }) {
   const { user, cart, increaseQuantity, decreaseQuantity } = useContext(CartContext);
+  const { enqueueSnackbar } = useSnackbar();
   const rv = String((user && user.role) || "").toLowerCase();
 
   const cartItem = cart.find((i) => i._id === item._id);
@@ -68,13 +70,17 @@ export default function FoodCard({ item, onAdd, onRemove, onUpdate }) {
       if (res?.status === 200 || res?.success) {
         if (typeof onUpdate === "function") onUpdate(res.data);
         setMsg("Updated");
+        enqueueSnackbar("Item updated successfully!", { variant: "success" });
         setEditing(false);
       } else {
-        setMsg(res?.message || "Failed to update");
+        const errMsg = res?.message || "Failed to update";
+        setMsg(errMsg);
+        enqueueSnackbar(errMsg, { variant: "error" });
       }
     } catch (e) {
       console.log(e);
       setMsg("Failed to Update Item");
+      enqueueSnackbar("Failed to update item", { variant: "error" });
     } finally {
       setLoading(false);
     }
@@ -94,6 +100,7 @@ export default function FoodCard({ item, onAdd, onRemove, onUpdate }) {
       setPendingDelete(null);
     } else {
       setSecretInput("");
+      enqueueSnackbar("Incorrect security code", { variant: "error" });
     }
   }
 
@@ -102,9 +109,13 @@ export default function FoodCard({ item, onAdd, onRemove, onUpdate }) {
       const res = await post("/food/removeItem", { itemname });
       if (res?.status === 200 || res?.success) {
         if (typeof onRemove === "function") onRemove(itemname);
+        enqueueSnackbar("Item deleted successfully", { variant: "success" });
+      } else {
+        enqueueSnackbar(res?.message || "Failed to delete item", { variant: "error" });
       }
     } catch (e) {
       console.log("Failed to remove item", e);
+      enqueueSnackbar("Failed to delete item", { variant: "error" });
     }
   }
 

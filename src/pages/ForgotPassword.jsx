@@ -1,7 +1,7 @@
 import { useState, useEffect, useContext } from "react";
 import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { forgotPassword, resetPassword } from "../utils/api";
-import { useToast } from "../hooks/useToast";
+import { useSnackbar } from "../hooks/useSnackbar";
 import { CartContext } from "../context/CartContext";
 
 import {
@@ -36,7 +36,7 @@ export default function ForgotPassword() {
 
   const navigate = useNavigate();
   const { login } = useContext(CartContext);
-  const { showToast } = useToast();
+  const { enqueueSnackbar } = useSnackbar();
 
   useEffect(() => {
     const emailParam = searchParams.get("email");
@@ -50,7 +50,7 @@ export default function ForgotPassword() {
     }
     if (emailParam && otpParam) {
       setStep(2);
-      showToast("Verification code verified from link. Enter your new password.", "info");
+      enqueueSnackbar("Verification code verified from link. Enter your new password.", { variant: "info" });
     }
   }, [searchParams]);
 
@@ -65,7 +65,7 @@ export default function ForgotPassword() {
   const handleSendOtp = async (e) => {
     if (e) e.preventDefault();
     if (!email.trim()) {
-      showToast("Please enter your registered email or username", "error");
+      enqueueSnackbar("Please enter your registered email or username", { variant: "error" });
       return;
     }
 
@@ -73,17 +73,17 @@ export default function ForgotPassword() {
     try {
       const res = await forgotPassword(email.trim());
       if (res?.success) {
-        showToast(res.message || "Verification code sent to your email!", "success");
+        enqueueSnackbar(res.message || "Verification code sent to your email!", { variant: "success" });
         if (res.data?.email) {
           setEmail(res.data.email);
         }
         setStep(2);
         setResendCooldown(60);
       } else {
-        showToast(res?.message || "Failed to send reset code", "error");
+        enqueueSnackbar(res?.message || "Failed to send reset code", { variant: "error" });
       }
     } catch (err) {
-      showToast("Network error. Please try again.", "error");
+      enqueueSnackbar("Network error. Please try again.", { variant: "error" });
     } finally {
       setLoading(false);
     }
@@ -92,19 +92,19 @@ export default function ForgotPassword() {
   const handleResetPassword = async (e) => {
     if (e) e.preventDefault();
     if (!otp.trim()) {
-      showToast("Please enter the 6-digit verification code", "error");
+      enqueueSnackbar("Please enter the 6-digit verification code", { variant: "error" });
       return;
     }
     if (!newPassword) {
-      showToast("Please enter a new password", "error");
+      enqueueSnackbar("Please enter a new password", { variant: "error" });
       return;
     }
     if (newPassword.length < 6) {
-      showToast("Password must be at least 6 characters long", "error");
+      enqueueSnackbar("Password must be at least 6 characters long", { variant: "error" });
       return;
     }
     if (newPassword !== confirmPassword) {
-      showToast("Passwords do not match", "error");
+      enqueueSnackbar("Passwords do not match", { variant: "error" });
       return;
     }
 
@@ -114,21 +114,18 @@ export default function ForgotPassword() {
       if (res?.success && res?.data?.user) {
         const user = res.data.user;
         login(user);
-        showToast("Password reset successfully! Logged in.", "success");
+        enqueueSnackbar("Password reset successfully! Logged in.", { variant: "success" });
         const rollValue = String(user.role || "").toLowerCase();
         if (rollValue === "admin" || rollValue === "staff") {
           navigate("/admin/menu");
         } else {
           navigate("/student/menu");
         }
-      } else if (res?.success) {
-        showToast("Password reset successfully!", "success");
-        navigate("/login");
       } else {
-        showToast(res?.message || "Failed to reset password", "error");
+        enqueueSnackbar(res?.message || "Failed to reset password. Check your code.", { variant: "error" });
       }
     } catch (err) {
-      showToast("Network error. Please try again.", "error");
+      enqueueSnackbar("Failed to reset password. Please try again.", { variant: "error" });
     } finally {
       setLoading(false);
     }

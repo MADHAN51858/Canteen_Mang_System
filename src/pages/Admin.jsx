@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { postForm } from "../utils/api";
+import { useSnackbar } from "../hooks/useSnackbar";
 import {
   Alert,
   Box,
@@ -16,6 +17,7 @@ import FastfoodIcon from "@mui/icons-material/Fastfood";
 import Inventory2Icon from "@mui/icons-material/Inventory2";
 
 export default function Admin() {
+  const { enqueueSnackbar } = useSnackbar();
   const [form, setForm] = useState({
     itemname: "",
     price: "",
@@ -46,9 +48,18 @@ export default function Admin() {
     };
   }, [image]);
 
-  async function addItem() {
+  async function handleAddFood(e) {
+    e.preventDefault();
+    if (!form.itemname || !form.price) {
+      const errMsg = "Please fill in item name and price.";
+      setMsg(errMsg);
+      enqueueSnackbar(errMsg, { variant: "error" });
+      return;
+    }
     if (!image) {
-      setMsg("Please select an image before adding.");
+      const errMsg = "Please select an image before adding.";
+      setMsg(errMsg);
+      enqueueSnackbar(errMsg, { variant: "error" });
       return;
     }
     setLoading(true);
@@ -63,13 +74,17 @@ export default function Admin() {
       fd.append("image", image);
 
       const res = await postForm("/food/addItem", fd);
-      setMsg(res.message || "Added");
+      const successMsg = res.message || "Food item added successfully!";
+      setMsg(successMsg);
+      enqueueSnackbar(successMsg, { variant: "success" });
       // clear form on success
       setForm({ itemname: "", price: "", category: "BreakFast", stock: 0, description: "" });
       setImage(null);
     } catch (e) {
       console.error(e);
-      setMsg("Failed to Add Item");
+      const errMsg = "Failed to add item. Please try again.";
+      setMsg(errMsg);
+      enqueueSnackbar(errMsg, { variant: "error" });
     } finally {
       setLoading(false);
     }

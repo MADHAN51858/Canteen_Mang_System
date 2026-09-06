@@ -2,6 +2,7 @@ import { useContext, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CartContext } from "../context/CartContext";
 import { placeOrder, post } from "../utils/api";
+import { useSnackbar } from "../hooks/useSnackbar";
 
 import {
   Box,
@@ -18,8 +19,7 @@ import {
   Stack,
   Alert,
   CircularProgress,
-  Switch,
-  FormControlLabel,
+
   Dialog,
   DialogTitle,
   DialogContent,
@@ -83,6 +83,7 @@ export async function openRazorpay(amount) {
 export default function Cart() {
   const navigate = useNavigate();
   const { cart, removeFromCart, clearCart, user, increaseQuantity, decreaseQuantity, login } = useContext(CartContext);
+  const { enqueueSnackbar } = useSnackbar();
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
   const [isPre, setIsPre] = useState(false);
@@ -93,8 +94,14 @@ export default function Cart() {
   const walletBalance = Number(user?.walletBalance || 0);
 
   function handlePlaceOrderClick() {
-    if (!user) return setMsg("Please login to place order");
-    if (cart.length === 0) return setMsg("Cart is empty");
+    if (!user) {
+      enqueueSnackbar("Please login to place order", { variant: "error" });
+      return;
+    }
+    if (cart.length === 0) {
+      enqueueSnackbar("Your cart is empty", { variant: "warning" });
+      return;
+    }
     setPaymentDialogOpen(true);
   }
 
@@ -109,7 +116,9 @@ export default function Cart() {
       if (paymentMethod === "wallet") {
         // Check wallet balance
         if (walletBalance < total) {
-          setMsg(`Insufficient wallet balance. Available: ₹${walletBalance}, Required: ₹${total}`);
+          const balanceMsg = `Insufficient wallet balance. Available: ₹${walletBalance}, Required: ₹${total}`;
+          setMsg(balanceMsg);
+          enqueueSnackbar(balanceMsg, { variant: "warning" });
           setLoading(false);
           return;
         }
@@ -117,7 +126,9 @@ export default function Cart() {
         // Deduct from wallet
         const deductRes = await post("/users/deductFromWallet", { amount: total });
         if (!deductRes || !deductRes.success) {
-          setMsg(deductRes?.message || "Failed to deduct from wallet");
+          const errMsg = deductRes?.message || "Failed to deduct from wallet";
+          setMsg(errMsg);
+          enqueueSnackbar(errMsg, { variant: "error" });
           setLoading(false);
           return;
         }
@@ -129,20 +140,38 @@ export default function Cart() {
         }
 
         // Place order
-        await placeOrder(userOrder, isPre);
+        const orderRes = await placeOrder(userOrder, isPre);
+        if (!orderRes || orderRes.success === false) {
+          const errMsg = orderRes?.message || "Failed to place order";
+          setMsg(errMsg);
+          enqueueSnackbar(errMsg, { variant: "error" });
+          return;
+        }
         clearCart();
         setIsPre(false);
-        setMsg(`Order placed successfully! ₹${total} deducted from wallet.`);
+        const successMsg = `Order placed successfully! ₹${total} deducted from wallet.`;
+        setMsg(successMsg);
+        enqueueSnackbar(successMsg, { variant: "success" });
       } else {
         // Razorpay payment
         await openRazorpay(total);
-        await placeOrder(userOrder, isPre);
+        const orderRes = await placeOrder(userOrder, isPre);
+        if (!orderRes || orderRes.success === false) {
+          const errMsg = orderRes?.message || "Failed to place order";
+          setMsg(errMsg);
+          enqueueSnackbar(errMsg, { variant: "error" });
+          return;
+        }
         clearCart();
         setIsPre(false);
-        setMsg("Order placed successfully!");
+        const successMsg = "Order placed successfully!";
+        setMsg(successMsg);
+        enqueueSnackbar(successMsg, { variant: "success" });
       }
     } catch (err) {
-      setMsg(err?.message || "Failed to place order");
+      const errMsg = err?.message || "Failed to place order";
+      setMsg(errMsg);
+      enqueueSnackbar(errMsg, { variant: "error" });
     } finally {
       setLoading(false);
     }
@@ -255,18 +284,54 @@ export default function Cart() {
 
                 <Stack spacing={2}>
                   <Box sx={{ p: 2, borderRadius: 2, bgcolor: "#f8fafc", border: "1px solid #e2e8f0" }}>
-                    <Stack direction="row" justifyContent="space-between" alignItems="center">
-                      <Box>
-                        <Typography variant="caption" sx={{ color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                          Pre-order
-                        </Typography>
-                      </Box>
-                      <Switch
-                        checked={isPre}
-                        onChange={(e) => setIsPre(e.target.checked)}
+                    <Typography variant="caption" sx={{ color: "#64748b", fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5, mb: 1, display: "block" }}>
+                      Choose Order Type
+                    </Typography>
+                    <Stack direction="row" spacing={1.5}>
+                      <Button
+                        variant={!isPre ? "contained" : "outlined"}
+                        onClick={() => setIsPre(false)}
+                        fullWidth
+                        size="small"
                         disabled={cart.length === 0}
-                        color="primary"
-                      />
+                        sx={{
+                          borderRadius: 2,
+                          textTransform: "none",
+                          fontWeight: 700,
+                          py: 0.8,
+                          bgcolor: !isPre ? "#059669" : "transparent",
+                          borderColor: !isPre ? "#059669" : "#cbd5e1",
+                          color: !isPre ? "#ffffff" : "#64748b",
+                          "&:hover": {
+                            bgcolor: !isPre ? "#047857" : "#f1f5f9",
+                            borderColor: !isPre ? "#047857" : "#94a3b8",
+                          },
+                        }}
+                      >
+                        ⚡ Ordered Now
+                      </Button>
+                      <Button
+                        variant={isPre ? "contained" : "outlined"}
+                        onClick={() => setIsPre(true)}
+                        fullWidth
+                        size="small"
+                        disabled={cart.length === 0}
+                        sx={{
+                          borderRadius: 2,
+                          textTransform: "none",
+                          fontWeight: 700,
+                          py: 0.8,
+                          bgcolor: isPre ? "#8b5cf6" : "transparent",
+                          borderColor: isPre ? "#8b5cf6" : "#cbd5e1",
+                          color: isPre ? "#ffffff" : "#64748b",
+                          "&:hover": {
+                            bgcolor: isPre ? "#7c3aed" : "#f1f5f9",
+                            borderColor: isPre ? "#7c3aed" : "#94a3b8",
+                          },
+                        }}
+                      >
+                        ⏰ Pre-Order
+                      </Button>
                     </Stack>
                   </Box>
 

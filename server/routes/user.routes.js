@@ -21,6 +21,7 @@ import {
     withdrawAmount,
     forgotPassword,
     resetPassword,
+    changePassword,
 } from "../controllers/user.controller.js"
 import { verifyJwt } from "../middlewares/auth.middleware.js"
 import { upload } from "../middlewares/multer.middleware.js"
@@ -33,6 +34,7 @@ router.route("/forgot-password").post(forgotPassword)
 router.route("/reset-password").post(resetPassword)
 router.route("/logout").post(verifyJwt, logout)
 router.route("/getMe").get(verifyJwt, getMe)
+router.route("/changePassword").post(verifyJwt, changePassword)
 router.route("/updateRole").post(verifyJwt, updateUserRole)
 router.route("/updateProfile").post(verifyJwt, upload.single("avatar"), updateProfile)
 router.route("/withdrawAmount").post(verifyJwt, withdrawAmount)

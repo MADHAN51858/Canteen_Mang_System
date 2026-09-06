@@ -10,7 +10,7 @@ import { uploadOnCloudinary, deleteFromCloudinaryByUrl } from "../utils/cloudina
 const addItem = asyncHandler(async (req, res) => {
   // When using multer + multipart/form-data, req.body values are strings.
   // Accept string values and coerce them properly. Also allow price = 0.
-  let { itemname, price, category, stock, description } = req.body || {};
+  let { itemname, price, category, stock, description, offer, isVeg } = req.body || {};
 
   // check presence (undefined or null) rather than truthiness to allow falsy but valid values
   if (
@@ -33,6 +33,12 @@ const addItem = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Invalid stock quantity");
   }
 
+  const parsedOffer = Math.max(0, Math.min(100, Number(offer) || 0));
+  const parsedIsVeg =
+    typeof isVeg !== "undefined"
+      ? isVeg === true || isVeg === "true" || isVeg === 1 || isVeg === "1"
+      : true;
+
   const inStockBool = parsedStock > 0;
 
   if (typeof itemname === "string") itemname = itemname.trim();
@@ -42,7 +48,6 @@ const addItem = asyncHandler(async (req, res) => {
   if (foodExists) {
     throw new ApiError(400, "Product Already Exists");
   }
-
 
   let imageUrl;
   if (req.file) {
@@ -57,6 +62,8 @@ const addItem = asyncHandler(async (req, res) => {
     category,
     inStock: inStockBool,
     stock: parsedStock,
+    offer: parsedOffer,
+    isVeg: parsedIsVeg,
     description: typeof description === "string" ? description.trim() : "",
   });
 
@@ -77,7 +84,7 @@ const addItem = asyncHandler(async (req, res) => {
 const updateItem = asyncHandler(async (req, res) => {
   // Simple req.body based update handler.
   // Accepts either { id, ...fields } or { oldItemname, ...fields }
-  const { id, oldItemname, itemname, price, category, inStock, image, stock, description } =
+  const { id, oldItemname, itemname, price, category, inStock, image, stock, description, offer, isVeg } =
     req.body || {};
 
   if (!id && !oldItemname) {
@@ -117,6 +124,21 @@ const updateItem = asyncHandler(async (req, res) => {
     if (typeof update.inStock === "undefined") {
       update.inStock = s > 0;
     }
+  }
+
+  if (typeof offer !== "undefined") {
+    const o = Number(offer);
+    if (!Number.isNaN(o)) {
+      update.offer = Math.max(0, Math.min(100, o));
+    }
+  }
+
+  if (typeof isVeg !== "undefined") {
+    update.isVeg =
+      isVeg === true ||
+      isVeg === "true" ||
+      isVeg === 1 ||
+      isVeg === "1";
   }
 
   if (typeof description !== "undefined") {

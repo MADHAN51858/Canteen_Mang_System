@@ -64,7 +64,11 @@ export default function UnifiedSidebar() {
     await apiLogout();
     clearCart();
     clearUser();
-    localStorage.clear();
+    try {
+      sessionStorage.clear();
+      localStorage.removeItem('user');
+      localStorage.removeItem('cart');
+    } catch (e) {}
     navigate("/login");
   }
 
@@ -92,28 +96,7 @@ export default function UnifiedSidebar() {
       roles: ["admin", "staff", "student"],
     },
     {
-      label: "Cart",
-      to: "/student/cart",
-      icon: (
-        <Badge
-          badgeContent={cart?.length || 0}
-          color="error"
-          sx={{
-            "& .MuiBadge-badge": {
-              fontSize: "0.7rem",
-              height: 18,
-              minWidth: 18,
-              fontWeight: 700,
-            },
-          }}
-        >
-          <ShoppingCartOutlinedIcon sx={{ fontSize: 22 }} />
-        </Badge>
-      ),
-      roles: ["student"],
-    },
-    {
-      label: "Order Management",
+      label: userRole === "student" ? "My Orders" : "Order Management",
       to: userRole === "student" ? "/student/orders" : "/admin/orders",
       icon: <AssignmentOutlinedIcon sx={{ fontSize: 22 }} />,
       roles: ["admin", "staff", "student"],

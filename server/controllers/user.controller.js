@@ -784,11 +784,16 @@ const updateProfile = asyncHandler(async (req, res) => {
     updateFields.avatar = uploadResult.secure_url;
   }
 
+  const oldUsername = user.username;
   const updatedUser = await User.findByIdAndUpdate(
     userId,
     { $set: updateFields },
     { new: true, runValidators: true }
   ).select("-password -refreshToken -accessToken -resetPasswordOtp -resetPasswordExpiry");
+
+  if (updateFields.username && updateFields.username !== oldUsername) {
+    await Order.updateMany({ orderedBy: oldUsername }, { orderedBy: updateFields.username });
+  }
 
   return res.status(200).json(
     new ApiResponse(200, { user: updatedUser }, "Profile updated successfully")
@@ -950,6 +955,35 @@ const resetPassword = asyncHandler(async (req, res) => {
     );
 });
 
+const changePassword = asyncHandler(async (req, res) => {
+  const { newPassword } = req.body;
+  const userId = req.user?._id;
+
+  if (!userId) {
+    throw new ApiError(401, "Unauthorized - User not found");
+  }
+
+  if (!newPassword) {
+    throw new ApiError(400, "New password is required");
+  }
+
+  if (String(newPassword).length < 6) {
+    throw new ApiError(400, "New password must be at least 6 characters long");
+  }
+
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  user.password = newPassword;
+  await user.save();
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, {}, "Password changed successfully"));
+});
+
 export {
   registerUser,
   addFriends,
@@ -972,4 +1006,6 @@ export {
   withdrawAmount,
   forgotPassword,
   resetPassword,
+  changePassword,
 };
+

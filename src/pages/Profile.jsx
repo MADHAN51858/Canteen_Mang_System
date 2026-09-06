@@ -2,6 +2,7 @@ import { useState, useContext, useEffect, useRef } from "react";
 import { post, postForm } from "../utils/api";
 import { CartContext } from "../context/CartContext";
 import { openRazorpay } from "./Cart";
+import { useSnackbar } from "../hooks/useSnackbar";
 import {
   Box,
   Typography,
@@ -22,6 +23,7 @@ import {
   FormControlLabel,
   Divider,
   Chip,
+  InputAdornment,
 } from "@mui/material";
 
 // Icons
@@ -41,6 +43,8 @@ import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
 import CancelRoundedIcon from "@mui/icons-material/CancelRounded";
 import BoltRoundedIcon from "@mui/icons-material/BoltRounded";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import PhotoCameraRoundedIcon from "@mui/icons-material/PhotoCameraRounded";
 import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
 import CloudUploadOutlinedIcon from "@mui/icons-material/CloudUploadOutlined";
@@ -66,6 +70,7 @@ function formatDate(dateString) {
 
 export default function UserProfile() {
   const { user, login } = useContext(CartContext);
+  const { enqueueSnackbar } = useSnackbar();
   const fileInputRef = useRef(null);
 
   // Profile editable form states
@@ -97,6 +102,61 @@ export default function UserProfile() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordMsg, setPasswordMsg] = useState("");
+  const [passwordSeverity, setPasswordSeverity] = useState("info");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  const handleOpenPasswordDialog = () => {
+    setNewPassword("");
+    setConfirmPassword("");
+    setPasswordMsg("");
+    setPasswordSeverity("info");
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
+    setPasswordOpen(true);
+  };
+
+  const handleClosePasswordDialog = () => {
+    if (!passwordSaving) {
+      setPasswordOpen(false);
+      setPasswordMsg("");
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!newPassword || !confirmPassword) {
+      enqueueSnackbar("Please enter and confirm your new password.", { variant: "error" });
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      enqueueSnackbar("New password must be at least 6 characters long.", { variant: "error" });
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      enqueueSnackbar("Passwords do not match.", { variant: "error" });
+      return;
+    }
+
+    setPasswordSaving(true);
+    try {
+      const res = await post("/users/changePassword", { newPassword });
+      if (res && res.success) {
+        enqueueSnackbar(res.message || "Password changed successfully!", { variant: "success" });
+        setNewPassword("");
+        setConfirmPassword("");
+        setPasswordOpen(false);
+      } else {
+        enqueueSnackbar(res?.message || "Failed to change password.", { variant: "error" });
+      }
+    } catch (err) {
+      enqueueSnackbar(err?.response?.data?.message || err?.message || "Failed to change password", { variant: "error" });
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
 
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifOrder, setNotifOrder] = useState(true);
@@ -116,6 +176,20 @@ export default function UserProfile() {
 
   async function fetchOrderCounts() {
     try {
+      const isAdminUser = user?.role === "admin" || user?.role === "staff";
+      if (isAdminUser) {
+        const res = await post("/order/getOrderGraphCards", {});
+        if (res && res.data) {
+          setOrderCounts({
+            pending: Number(res.data.pending?.count ?? res.data.unfulfilled?.count ?? 0),
+            preparing: Number(res.data.preparing?.count ?? res.data.pendingReceipt?.count ?? 0),
+            completed: Number(res.data.completed?.count ?? res.data.fulfilled?.count ?? 0),
+            cancelled: Number(res.data.cancelled?.count ?? 0),
+          });
+          return;
+        }
+      }
+
       const res = await post("/order/getUserOrderList", {});
       if (res && res.success && Array.isArray(res.data)) {
         const counts = res.data.reduce(
@@ -129,8 +203,6 @@ export default function UserProfile() {
           },
           { pending: 0, preparing: 0, cancelled: 0, completed: 0 }
         );
-        const cancelledFromUser = Number(user?.cancelledCount || 0);
-        counts.cancelled += cancelledFromUser;
         setOrderCounts(counts);
       }
     } catch {
@@ -143,19 +215,18 @@ export default function UserProfile() {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) {
-      setMsg("Please select a valid image file");
+      enqueueSnackbar("Please select a valid image file", { variant: "error" });
       return;
     }
     setAvatarFile(file);
     setAvatarPreview(URL.createObjectURL(file));
-    setMsg("");
+    enqueueSnackbar("Photo selected. Click 'Save Changes' to update your avatar.", { variant: "info" });
   };
 
   // Save changes directly from the left editable form
   const handleSaveChanges = async () => {
-    setMsg("");
     if (!username || !email || !phoneNo || !rollNo) {
-      setMsg("All fields are required");
+      enqueueSnackbar("All fields are required", { variant: "error" });
       return;
     }
 
@@ -172,21 +243,25 @@ export default function UserProfile() {
 
       const res = await postForm("/users/updateProfile", formData);
       if (res && res.success && res.data && res.data.user) {
-        login(res.data.user);
-        setUsername(res.data.user.username);
-        setEmail(res.data.user.email);
-        setPhoneNo(String(res.data.user.phoneNo));
-        setRollNo(res.data.user.rollNo);
-        if (res.data.user.avatar) {
-          setAvatarPreview(res.data.user.avatar);
+        const updatedUser = res.data.user;
+        try {
+          sessionStorage.setItem("user", JSON.stringify(updatedUser));
+        } catch (e) {}
+        login(updatedUser);
+        setUsername(updatedUser.username);
+        setEmail(updatedUser.email);
+        setPhoneNo(String(updatedUser.phoneNo));
+        setRollNo(updatedUser.rollNo);
+        if (updatedUser.avatar) {
+          setAvatarPreview(updatedUser.avatar);
         }
         setAvatarFile(null);
-        setMsg("Profile updated successfully!");
+        enqueueSnackbar("Profile updated successfully!", { variant: "success" });
       } else {
-        setMsg(res?.message || "Failed to update profile");
+        enqueueSnackbar(res?.message || "Failed to update profile", { variant: "error" });
       }
     } catch (err) {
-      setMsg(err?.message || "Failed to update profile");
+      enqueueSnackbar(err?.message || "Failed to update profile", { variant: "error" });
     } finally {
       setSaving(false);
     }
@@ -199,6 +274,7 @@ export default function UserProfile() {
     const amountNum = Number(String(amountVal).replace(/[^0-9.]/g, ""));
     if (!amountNum || amountNum <= 0) {
       setAddError("Please enter a valid amount");
+      enqueueSnackbar("Please enter a valid amount", { variant: "error" });
       return;
     }
 
@@ -212,8 +288,11 @@ export default function UserProfile() {
       }
       setAddMoneyOpen(false);
       setAddAmount("");
+      enqueueSnackbar(`₹${amountNum} added to wallet successfully!`, { variant: "success" });
     } catch (err) {
-      setAddError(err?.message || "Failed to add money");
+      const errorMsg = err?.message || "Failed to add money";
+      setAddError(errorMsg);
+      enqueueSnackbar(errorMsg, { variant: "error" });
     } finally {
       setAddSaving(false);
     }
@@ -274,10 +353,7 @@ export default function UserProfile() {
               flexDirection: "column",
               justifyContent: "space-between",
               transition: "border-color 0.2s ease",
-              "&:hover": {
-                boxShadow: "none",
-                borderColor: "#cbd5e1",
-              },
+         
             }}
           >
             {/* Header: Profile Overview */}
@@ -387,7 +463,7 @@ export default function UserProfile() {
                   variant="outlined"
                   sx={{
                     "& .MuiOutlinedInput-root": {
-                      borderRadius: "12px",
+                      borderRadius: "8px",
                       backgroundColor: "#fbfcfd",
                       transition: "all 0.2s ease",
                       border: "1px solid #e2e8f0",
@@ -418,7 +494,7 @@ export default function UserProfile() {
                   variant="outlined"
                   sx={{
                     "& .MuiOutlinedInput-root": {
-                      borderRadius: "12px",
+                      borderRadius: "8px",
                       backgroundColor: "#fbfcfd",
                       transition: "all 0.2s ease",
                       border: "1px solid #e2e8f0",
@@ -449,7 +525,7 @@ export default function UserProfile() {
                   variant="outlined"
                   sx={{
                     "& .MuiOutlinedInput-root": {
-                      borderRadius: "12px",
+                      borderRadius: "8px",
                       backgroundColor: "#fbfcfd",
                       transition: "all 0.2s ease",
                       border: "1px solid #e2e8f0",
@@ -481,7 +557,7 @@ export default function UserProfile() {
                   variant="outlined"
                   sx={{
                     "& .MuiOutlinedInput-root": {
-                      borderRadius: "12px",
+                      borderRadius: "8px",
                       backgroundColor: "#fbfcfd",
                       transition: "all 0.2s ease",
                       border: "1px solid #e2e8f0",
@@ -498,7 +574,7 @@ export default function UserProfile() {
                 />
               </Box>
 
-              <Box sx={{ backgroundColor: "#f8fafc", p: 2, borderRadius: "14px", border: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Box sx={{ backgroundColor: "#f8fafc", p: 2, borderRadius: "8px", border: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <Typography sx={{ fontSize: "0.84rem", fontWeight: 600 }}>
                   Registration on
                 </Typography>
@@ -506,16 +582,6 @@ export default function UserProfile() {
                   {formatDate(user?.createdAt)}
                 </Typography>
               </Box>
-
-              {/* Alert Message */}
-              {msg && (
-                <Alert
-                  severity={msg.toLowerCase().includes("fail") || msg.toLowerCase().includes("error") ? "error" : "success"}
-                  sx={{ borderRadius: "12px", fontWeight: 600 }}
-                >
-                  {msg}
-                </Alert>
-              )}
 
               {/* Save Changes Button */}
               <Box sx={{ mt: "auto", pt: 1 }}>
@@ -540,7 +606,7 @@ export default function UserProfile() {
                     },
                   }}
                 >
-                  {saving ? "Saving Changes..." : "Save Changes"}
+                  {saving ? "Saving Changes..." : "Update Profile"}
                 </Button>
               </Box>
             </Stack>
@@ -584,9 +650,7 @@ export default function UserProfile() {
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "space-between",
-                "&:hover": {
-                  boxShadow: "none",
-                },
+              
               }}
             >
               <Box sx={{ position: "relative", zIndex: 2, display: "flex", flexDirection: "column", justifyContent: "space-between", height: "100%" }}>
@@ -684,10 +748,7 @@ export default function UserProfile() {
                 flexDirection: "column",
                 justifyContent: "space-between",
                 transition: "border-color 0.2s ease",
-                "&:hover": {
-                  boxShadow: "none",
-                  borderColor: "#cbd5e1",
-                },
+           
               }}
             >
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
@@ -944,10 +1005,7 @@ export default function UserProfile() {
                 flexDirection: "column",
                 justifyContent: "space-between",
                 transition: "border-color 0.2s ease",
-                "&:hover": {
-                  boxShadow: "none",
-                  borderColor: "#cbd5e1",
-                },
+          
               }}
             >
               <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", mb: 2 }}>
@@ -988,12 +1046,7 @@ export default function UserProfile() {
               >
                 {/* Change Password Card */}
                 <Box
-                  onClick={() => {
-                    setNewPassword("");
-                    setConfirmPassword("");
-                    setPasswordMsg("");
-                    setPasswordOpen(true);
-                  }}
+                  onClick={handleOpenPasswordDialog}
                   sx={{
                     display: "flex",
                     alignItems: "center",
@@ -1007,11 +1060,7 @@ export default function UserProfile() {
                     cursor: "pointer",
                     boxShadow: "none",
                     transition: "all 0.2s ease",
-                    "&:hover": {
-                      backgroundColor: "#f5f3ff",
-                      borderColor: "#ddd6fe",
-                      boxShadow: "none",
-                    },
+                
                   }}
                 >
                   <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
@@ -1177,7 +1226,7 @@ export default function UserProfile() {
       {/* B. CHANGE PASSWORD DIALOG */}
       <Dialog
         open={passwordOpen}
-        onClose={() => setPasswordOpen(false)}
+        onClose={handleClosePasswordDialog}
         maxWidth="xs"
         fullWidth
         PaperProps={{ sx: { borderRadius: "20px", p: 1.5 } }}
@@ -1187,47 +1236,79 @@ export default function UserProfile() {
         </DialogTitle>
         <DialogContent>
           <Typography sx={{ color: "#64748b", fontSize: "0.86rem", mb: 2 }}>
-            Enter your new password to secure your account.
+            Update your account credentials to keep your account secure.
           </Typography>
 
           {passwordMsg && (
-            <Alert severity={passwordMsg.includes("success") ? "success" : "info"} sx={{ mb: 2, borderRadius: "10px" }}>
+            <Alert severity={passwordSeverity} sx={{ mb: 2, borderRadius: "10px", fontWeight: 600 }}>
               {passwordMsg}
             </Alert>
           )}
           <Stack spacing={2} sx={{ mt: 1 }}>
             <TextField
               label="New Password"
-              type="password"
+              type={showNewPassword ? "text" : "password"}
               fullWidth
+              disabled={passwordSaving}
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
+              helperText="Minimum 6 characters"
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      onClick={() => setShowNewPassword(!showNewPassword)}
+                      edge="end"
+                      size="small"
+                      disabled={passwordSaving}
+                      sx={{ color: "#94a3b8" }}
+                    >
+                      {showNewPassword ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
               sx={{ "& .MuiOutlinedInput-root": { borderRadius: "12px" } }}
             />
             <TextField
               label="Confirm New Password"
-              type="password"
+              type={showConfirmPassword ? "text" : "password"}
               fullWidth
+              disabled={passwordSaving}
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      edge="end"
+                      size="small"
+                      disabled={passwordSaving}
+                      sx={{ color: "#94a3b8" }}
+                    >
+                      {showConfirmPassword ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
               sx={{ "& .MuiOutlinedInput-root": { borderRadius: "12px" } }}
             />
           </Stack>
         </DialogContent>
         <DialogActions sx={{ p: 2, pt: 1 }}>
-          <Button onClick={() => setPasswordOpen(false)} sx={{ textTransform: "none", fontWeight: 600, color: "#64748b" }}>
+          <Button
+            onClick={handleClosePasswordDialog}
+            disabled={passwordSaving}
+            sx={{ textTransform: "none", fontWeight: 600, color: "#64748b" }}
+          >
             Cancel
           </Button>
           <Button
-            onClick={() => {
-              if (!newPassword || newPassword !== confirmPassword) {
-                setPasswordMsg("Passwords do not match or cannot be empty.");
-                return;
-              }
-              setPasswordMsg("Password updated successfully!");
-              setTimeout(() => setPasswordOpen(false), 1200);
-            }}
+            onClick={handleChangePassword}
             variant="contained"
+            disabled={passwordSaving}
+            startIcon={passwordSaving ? <CircularProgress size={18} color="inherit" /> : <LockOutlinedIcon sx={{ fontSize: 18 }} />}
             sx={{
               backgroundColor: "#7c3aed",
               "&:hover": { backgroundColor: "#6d28d9" },
@@ -1238,7 +1319,7 @@ export default function UserProfile() {
               py: 1,
             }}
           >
-            Update Password
+            {passwordSaving ? "Updating..." : "Update Password"}
           </Button>
         </DialogActions>
       </Dialog>

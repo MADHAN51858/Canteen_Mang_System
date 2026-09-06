@@ -2,7 +2,7 @@ import { useState, useContext } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { post } from "../utils/api";
 import { CartContext } from "../context/CartContext";
-import { useToast } from "../hooks/useToast";
+import { useSnackbar } from "../hooks/useSnackbar";
 
 import {
   Box,
@@ -25,7 +25,7 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
   const { login } = useContext(CartContext);
-  const { showToast } = useToast();
+  const { enqueueSnackbar } = useSnackbar();
 
   async function handleLogin() {
     // setLoading(true);
@@ -42,6 +42,7 @@ export default function Login() {
         const user = res.data.user;
         console.log("User logged in:", user);
         login(user);
+        enqueueSnackbar(`Welcome back, ${user.username}!`, { variant: "success" });
         const rollValue = String(user.role || "").toLowerCase();
         console.log("User role:", rollValue);
         if (rollValue === "admin" || rollValue === "staff") {
@@ -50,13 +51,13 @@ export default function Login() {
           navigate("/student/menu");
         }
       } else {
-        const errorMsg = res.message || "Login failed";
-        showToast(errorMsg, "error");
+        const errorMsg = res?.message || "Login failed";
+        enqueueSnackbar(errorMsg, { variant: "error" });
         console.error("Login failed:", res);
       }
     } catch (e) {
       console.error("Login error:", e);
-      showToast("Login failed. Please try again.", "error");
+      enqueueSnackbar("Login failed. Please try again.", { variant: "error" });
     } finally {
       // setLoading(false);
     }

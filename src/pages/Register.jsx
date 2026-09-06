@@ -2,7 +2,7 @@ import { useState, useContext, useRef } from "react";
 import { useNavigate, Link as RouterLink } from "react-router-dom";
 import { post, postForm } from "../utils/api";
 import { CartContext } from "../context/CartContext";
-import { useToast } from "../hooks/useToast";
+import { useSnackbar } from "../hooks/useSnackbar";
 import {
   Box,
   Paper,
@@ -47,17 +47,18 @@ export default function Register() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { login } = useContext(CartContext);
-  const { showToast } = useToast();
+  const { enqueueSnackbar } = useSnackbar();
 
   const handleAvatarSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) {
-      showToast("Please select a valid image file", "error");
+      enqueueSnackbar("Please select a valid image file", { variant: "error" });
       return;
     }
     setAvatarFile(file);
     setAvatarPreview(URL.createObjectURL(file));
+    enqueueSnackbar("Avatar selected!", { variant: "info" });
   };
 
   async function handleRegister() {
@@ -81,17 +82,17 @@ export default function Register() {
 
       if (res.success) {
         const userData = res.data || {};
-        showToast("Registered successfully with profile photo!", "success");
+        enqueueSnackbar("Registered successfully with profile photo!", { variant: "success" });
         login(userData);
         const role = String(userData.role || "student").toLowerCase();
         const target = role === "admin" ? "/admin/menu" : "/student/menu";
         navigate(target);
       } else {
         const errorMsg = res.message || "Registration failed. Please try again.";
-        showToast(errorMsg, "error");
+        enqueueSnackbar(errorMsg, { variant: "error" });
       }
     } catch (e) {
-      showToast("Registration failed. Please try again.", "error");
+      enqueueSnackbar("Registration failed. Please try again.", { variant: "error" });
     } finally {
       setLoading(false);
     }

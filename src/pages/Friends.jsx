@@ -2,6 +2,7 @@
 import { useContext, useState, useEffect } from "react";
 import { CartContext } from "../context/CartContext";
 import { post } from "../utils/api";
+import { useSnackbar } from "../hooks/useSnackbar";
 import {
   Box,
   Typography,
@@ -20,6 +21,7 @@ import { openRazorpay } from "./Cart";
 
 export default function Friends() {
   const { user, login } = useContext(CartContext);
+  const { enqueueSnackbar } = useSnackbar();
   const [balance, setBalance] = useState(null);
   const [loading, setLoading] = useState(true);
   const [openDialog, setOpenDialog] = useState(false);
@@ -56,6 +58,7 @@ export default function Friends() {
   async function handleAddMoney() {
     const amountNum = parseFloat(amount);
     if (!amountNum || amountNum <= 0) {
+      enqueueSnackbar("Please enter a valid amount", { variant: "error" });
       return;
     }
 
@@ -75,9 +78,13 @@ export default function Friends() {
         login(updatedUser);
         setAmount("");
         setOpenDialog(false);
+        enqueueSnackbar(`₹${amountNum} added to wallet successfully!`, { variant: "success" });
+      } else {
+        enqueueSnackbar(res?.message || "Failed to add money", { variant: "error" });
       }
     } catch (error) {
       console.error("Add money error:", error);
+      enqueueSnackbar("Payment or top-up failed. Please try again.", { variant: "error" });
     } finally {
       setProcessing(false);
     }

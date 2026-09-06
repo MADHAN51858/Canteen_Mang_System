@@ -41,10 +41,14 @@ app.post("/create-order", async (req, res) => {
 import userRouter from "./routes/user.routes.js"
 import foodRouter from "./routes/food.routes.js"
 import order from "./routes/order.routes.js"
+import tableRouter from "./routes/table.routes.js"
+import categoryRouter from "./routes/category.routes.js"
 
 app.use("/users", userRouter)
 app.use("/food", foodRouter)
 app.use("/order", order)
+app.use("/table", tableRouter)
+app.use("/category", categoryRouter)
 
 import path from "path";
 import fs from "fs";
@@ -65,6 +69,7 @@ app.use((req, res, next) => {
     req.path.startsWith("/users") ||
     req.path.startsWith("/food") ||
     req.path.startsWith("/order") ||
+    req.path.startsWith("/table") ||
     req.path.startsWith("/create-order")
   ) {
     return next();

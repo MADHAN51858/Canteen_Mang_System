@@ -761,7 +761,7 @@ export default function Users() {
             /* Loading Skeleton */
             <Box sx={{ p: 3 }}>
               <Stack spacing={2.5}>
-                {Array.from({ length: 7 }).map((_, idx) => (
+                {Array.from({ length: 10 }).map((_, idx) => (
                   <Stack key={idx} direction="row" spacing={2} alignItems="center" sx={{ py: 0.5 }}>
                     <Skeleton variant="rounded" width={18} height={18} sx={{ borderRadius: "4px" }} />
                     <Skeleton variant="circular" width={40} height={40} />
@@ -769,6 +769,8 @@ export default function Users() {
                       <Skeleton variant="text" width="25%" height={18} />
                       <Skeleton variant="text" width="18%" height={14} />
                     </Box>
+                    <Skeleton variant="rounded" width={70} height={26} sx={{ borderRadius: "6px" }} />
+                    <Skeleton variant="rounded" width={70} height={26} sx={{ borderRadius: "6px" }} />
                     <Skeleton variant="rounded" width={70} height={26} sx={{ borderRadius: "6px" }} />
                     <Skeleton variant="text" width="12%" height={16} />
                     <Skeleton variant="text" width="12%" height={16} />

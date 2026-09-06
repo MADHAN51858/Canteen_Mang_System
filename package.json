@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "st": "concurrently -n \"SERVER,CLIENT\" -c \"blue,green\" \"npm run dev:server\" \"npm run dev:client\"",
     "dev": "concurrently -n \"SERVER,CLIENT\" -c \"blue,green\" \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "nodemon -r dotenv/config server/index.js",
     "dev:client": "vite",

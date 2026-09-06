@@ -11,6 +11,7 @@ import {
     getCategoryFoodRevenueStats,
     getOrderStats,
     getOrderStatusStats,
+    getOrderGraphCards,
 } from "../controllers/order.controller.js"
 import { verifyJwt } from "../middlewares/auth.middleware.js"
 
@@ -28,6 +29,6 @@ router.route("/getCategoryRevenueStats").post(verifyJwt, getCategoryRevenueStats
 router.route("/getCategoryFoodRevenueStats").post(verifyJwt, getCategoryFoodRevenueStats)
 router.route("/getOrderStats").post(verifyJwt, getOrderStats)
 router.route("/getOrderStatusStats").post(verifyJwt, getOrderStatusStats)
-
+router.route("/getOrderGraphCards").post(verifyJwt, getOrderGraphCards)
 
 export default router;
