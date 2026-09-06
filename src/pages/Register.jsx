@@ -185,28 +185,7 @@ export default function Register() {
             </Typography>
           </Box>
 
-          {/* Bottom Student Note Badge */}
-          <Box
-            sx={{
-              mt: { xs: 5, md: 8 },
-              background: "rgba(255, 255, 255, 0.06)",
-              border: "1px solid rgba(255, 255, 255, 0.05)",
-              borderRadius: "12px",
-              p: { xs: 2, sm: 2.2 },
-              backdropFilter: "blur(6px)",
-            }}
-          >
-            <Typography
-              sx={{
-                color: "#F0D3CB",
-                fontSize: "14px",
-                fontWeight: 500,
-                lineHeight: 1.45,
-              }}
-            >
-              Only students with a valid roll number can register
-            </Typography>
-          </Box>
+     
         </Box>
 
         {/* Right Dark Form Panel */}

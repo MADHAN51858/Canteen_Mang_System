@@ -14,6 +14,11 @@ const foodSchema = new Schema(
             required: true,
             min: 0
         },
+        originalPrice: {
+            type: Number,
+            min: 0,
+            default: 0
+        },
         image: {
             type: String,
         },
@@ -46,6 +51,34 @@ const foodSchema = new Schema(
             type: String,
             trim: true,
             default: ""
+        },
+        ratings: [
+            {
+                user: {
+                    type: Schema.Types.ObjectId,
+                    ref: "User"
+                },
+                rating: {
+                    type: Number,
+                    required: true,
+                    min: 1,
+                    max: 5
+                },
+                createdAt: {
+                    type: Date,
+                    default: Date.now
+                }
+            }
+        ],
+        averageRating: {
+            type: Number,
+            default: 0,
+            min: 0,
+            max: 5
+        },
+        totalRatings: {
+            type: Number,
+            default: 0
         }
     },
     { timestamps: true }

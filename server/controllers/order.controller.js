@@ -371,8 +371,8 @@ const markCompleteByBarcode = asyncHandler(async (req, res) => {
     throw new ApiError(404, "User not found");
   }
 
-  if (admin.role !== "admin") {
-    throw new ApiError(403, "Only admins can mark orders as completed");
+  if (admin.role !== "admin" && admin.role !== "staff") {
+    throw new ApiError(403, "Only admins or staff can mark orders as completed");
   }
 
   // Normalize barcode for case-insensitive matching

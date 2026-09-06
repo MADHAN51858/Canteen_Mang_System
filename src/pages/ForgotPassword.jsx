@@ -15,9 +15,8 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 
 export default function ForgotPassword() {
   const [searchParams] = useSearchParams();
-  const [step, setStep] = useState(1); // 1: Identifier, 2: OTP & New Password
-  const [identifier, setIdentifier] = useState("");
-  const [resolvedEmail, setResolvedEmail] = useState("");
+  const [step, setStep] = useState(1); // 1: Email, 2: OTP & New Password
+  const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -33,8 +32,7 @@ export default function ForgotPassword() {
     const otpParam = searchParams.get("otp");
 
     if (emailParam) {
-      setIdentifier(emailParam);
-      setResolvedEmail(emailParam);
+      setEmail(emailParam);
     }
     if (otpParam) {
       setOtp(otpParam);
@@ -54,18 +52,18 @@ export default function ForgotPassword() {
 
   const handleSendOtp = async (e) => {
     if (e) e.preventDefault();
-    if (!identifier.trim()) {
-      enqueueSnackbar("Please enter your roll number or email", { variant: "error" });
+    if (!email.trim()) {
+      enqueueSnackbar("Please enter your registered email", { variant: "error" });
       return;
     }
 
     setLoading(true);
     try {
-      const res = await forgotPassword(identifier.trim());
+      const res = await forgotPassword(email.trim());
       if (res?.success) {
         enqueueSnackbar(res.message || "Verification code sent to your email!", { variant: "success" });
         if (res.data?.email) {
-          setResolvedEmail(res.data.email);
+          setEmail(res.data.email);
         }
         setStep(2);
         setResendCooldown(60);
@@ -96,7 +94,7 @@ export default function ForgotPassword() {
 
     setLoading(true);
     try {
-      const res = await resetPassword(resolvedEmail || identifier.trim(), otp.trim(), newPassword);
+      const res = await resetPassword(email.trim(), otp.trim(), newPassword);
       if (res?.success) {
         enqueueSnackbar("Password reset successfully! Logging you in...", { variant: "success" });
         if (res.data?.user) {
@@ -261,17 +259,17 @@ export default function ForgotPassword() {
             }}
           >
             {step === 1
-              ? "Enter your  email to get a verification code."
-              : `Enter the 6-digit code sent to ${resolvedEmail || "your email"}.`}
+              ? "Enter your email to get a verification code."
+              : `Enter the 6-digit code sent to ${email}.`}
           </Typography>
 
           {step === 1 ? (
-            /* Step 1: Identifier Form */
+            /* Step 1: Email Form */
             <form onSubmit={handleSendOtp}>
               <Box sx={{ mb: 3 }}>
                 <Typography
                   component="label"
-                  htmlFor="forgot-identifier"
+                  htmlFor="forgot-email"
                   sx={{
                     display: "block",
                     color: "#D0D2D7",
@@ -283,11 +281,11 @@ export default function ForgotPassword() {
                   Email
                 </Typography>
                 <input
-                  id="forgot-identifier"
-                  type="text"
-                  value={identifier}
-                  onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="DBIT2024CS041"
+                  id="forgot-email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="student@dbit.in"
                   required
                   style={{
                     width: "100%",

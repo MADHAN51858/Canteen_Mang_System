@@ -10,7 +10,7 @@ import { uploadOnCloudinary, deleteFromCloudinaryByUrl } from "../utils/cloudina
 const addItem = asyncHandler(async (req, res) => {
   // When using multer + multipart/form-data, req.body values are strings.
   // Accept string values and coerce them properly. Also allow price = 0.
-  let { itemname, price, category, stock, description, offer, isVeg } = req.body || {};
+  let { itemname, price, originalPrice, category, stock, description, offer, isVeg } = req.body || {};
 
   // check presence (undefined or null) rather than truthiness to allow falsy but valid values
   if (
@@ -28,12 +28,18 @@ const addItem = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Invalid price");
   }
 
+  const parsedOriginalPrice = Number(originalPrice) || parsedPrice;
+
   const parsedStock = Number(stock);
   if (Number.isNaN(parsedStock) || parsedStock < 0) {
     throw new ApiError(400, "Invalid stock quantity");
   }
 
-  const parsedOffer = Math.max(0, Math.min(100, Number(offer) || 0));
+  let parsedOffer = Math.max(0, Math.min(100, Number(offer) || 0));
+  if (parsedOriginalPrice > parsedPrice) {
+    parsedOffer = Math.round(((parsedOriginalPrice - parsedPrice) / parsedOriginalPrice) * 100);
+  }
+
   const parsedIsVeg =
     typeof isVeg !== "undefined"
       ? isVeg === true || isVeg === "true" || isVeg === 1 || isVeg === "1"
@@ -58,6 +64,7 @@ const addItem = asyncHandler(async (req, res) => {
   const Product = await Food.create({
     itemname: itemname.toLowerCase(),
     price: parsedPrice,
+    originalPrice: parsedOriginalPrice,
     image: imageUrl,
     category,
     inStock: inStockBool,
@@ -84,11 +91,19 @@ const addItem = asyncHandler(async (req, res) => {
 const updateItem = asyncHandler(async (req, res) => {
   // Simple req.body based update handler.
   // Accepts either { id, ...fields } or { oldItemname, ...fields }
-  const { id, oldItemname, itemname, price, category, inStock, image, stock, description, offer, isVeg } =
+  const { id, oldItemname, itemname, price, originalPrice, category, inStock, image, stock, description, offer, isVeg } =
     req.body || {};
 
   if (!id && !oldItemname) {
     throw new ApiError(400, "Either id or oldItemname is required for update");
+  }
+
+  const existingFood = id
+    ? await Food.findById(id)
+    : await Food.findOne({ itemname: oldItemname ? oldItemname.trim().toLowerCase() : "" });
+
+  if (!existingFood) {
+    throw new ApiError(404, "Item not found");
   }
 
   const update = {};
@@ -104,6 +119,25 @@ const updateItem = asyncHandler(async (req, res) => {
     const p = Number(price);
     if (Number.isNaN(p)) throw new ApiError(400, "Invalid price");
     update.price = p;
+  }
+
+  if (typeof originalPrice !== "undefined") {
+    const op = Number(originalPrice);
+    if (!Number.isNaN(op)) update.originalPrice = op;
+  }
+
+  // Automatically calculate offer percentage if originalPrice and price are known
+  const effPrice = typeof update.price !== "undefined" ? update.price : existingFood.price;
+  const effOrigPrice = typeof update.originalPrice !== "undefined" ? update.originalPrice : (existingFood.originalPrice || effPrice);
+  if (effOrigPrice > effPrice) {
+    update.offer = Math.round(((effOrigPrice - effPrice) / effOrigPrice) * 100);
+  } else if (typeof offer !== "undefined") {
+    const o = Number(offer);
+    if (!Number.isNaN(o)) {
+      update.offer = Math.max(0, Math.min(100, o));
+    }
+  } else {
+    update.offer = 0;
   }
 
   if (typeof category !== "undefined") update.category = category;
@@ -126,13 +160,6 @@ const updateItem = asyncHandler(async (req, res) => {
     }
   }
 
-  if (typeof offer !== "undefined") {
-    const o = Number(offer);
-    if (!Number.isNaN(o)) {
-      update.offer = Math.max(0, Math.min(100, o));
-    }
-  }
-
   if (typeof isVeg !== "undefined") {
     update.isVeg =
       isVeg === true ||
@@ -146,14 +173,6 @@ const updateItem = asyncHandler(async (req, res) => {
   }
 
   if (typeof image !== "undefined") update.image = image;
-
-  const existingFood = id
-    ? await Food.findById(id)
-    : await Food.findOne({ itemname: oldItemname ? oldItemname.trim().toLowerCase() : "" });
-
-  if (!existingFood) {
-    throw new ApiError(404, "Item not found");
-  }
 
   // If a file was uploaded via multer (multipart/form-data), upload it and set image
   if (req.file) {
@@ -242,4 +261,69 @@ const getAllFoods = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, foods, "All foods fetched successfully"));
 });
 
-export { addItem, updateItem, removeItem, getItemsBasedOnCategory, getAllFoods };
+const rateFood = asyncHandler(async (req, res) => {
+  const { foodId, rating } = req.body;
+  const userId = req.user?._id || req.body.userId;
+
+  if (!foodId || rating === undefined || rating === null) {
+    throw new ApiError(400, "Food ID and rating are required");
+  }
+
+  const numericRating = Number(rating);
+  if (isNaN(numericRating) || numericRating < 1 || numericRating > 5) {
+    throw new ApiError(400, "Rating must be between 1 and 5");
+  }
+
+  const food = await Food.findById(foodId);
+  if (!food) {
+    throw new ApiError(404, "Food item not found");
+  }
+
+  if (!Array.isArray(food.ratings)) {
+    food.ratings = [];
+  }
+
+  if (userId) {
+    const existingIndex = food.ratings.findIndex(
+      (r) => r.user && String(r.user) === String(userId)
+    );
+    if (existingIndex >= 0) {
+      food.ratings[existingIndex].rating = numericRating;
+      food.ratings[existingIndex].createdAt = new Date();
+    } else {
+      food.ratings.push({
+        user: userId,
+        rating: numericRating,
+        createdAt: new Date(),
+      });
+    }
+  } else {
+    food.ratings.push({
+      rating: numericRating,
+      createdAt: new Date(),
+    });
+  }
+
+  const total = food.ratings.reduce((sum, r) => sum + Number(r.rating || 0), 0);
+  const avg = food.ratings.length > 0 ? total / food.ratings.length : 0;
+  food.averageRating = Math.round(avg * 10) / 10;
+  food.totalRatings = food.ratings.length;
+
+  await food.save();
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        foodId: food._id,
+        itemname: food.itemname,
+        averageRating: food.averageRating,
+        totalRatings: food.totalRatings,
+        ratings: food.ratings,
+      },
+      "Rating submitted successfully"
+    )
+  );
+});
+
+export { addItem, updateItem, removeItem, getItemsBasedOnCategory, getAllFoods, rateFood };

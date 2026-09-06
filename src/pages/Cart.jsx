@@ -35,7 +35,7 @@ import {
 import DeleteIcon from "@mui/icons-material/Delete";
 import ShoppingBagIcon from "@mui/icons-material/ShoppingBag";
 
-export async function openRazorpay(amount) {
+export async function openRazorpay(amount, description = "Order Payment") {
   // Load Razorpay script if not loaded
   if (!window.Razorpay) {
     const script = document.createElement("script");
@@ -48,12 +48,13 @@ export async function openRazorpay(amount) {
 
   // Step 2: open Razorpay checkout popup (dummy gateway - no order_id)
   return new Promise((resolve, reject) => {
+    const isWithdraw = description?.toLowerCase().includes("withdraw");
     const options = {
       key: "rzp_test_RgiPSqw18Sa2P8",
-      amount: amount * 100, // Convert to paise
+      amount: Math.round(amount * 100), // Convert to paise
       currency: "INR",
-      name: "Food Ordering App",
-      description: "Order Payment",
+      name: isWithdraw ? "Wallet Withdrawal" : "Food Ordering App",
+      description: description || "Order Payment",
       // NO order_id for dummy gateway
 
       handler: function (response) {

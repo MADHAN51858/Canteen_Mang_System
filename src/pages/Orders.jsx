@@ -20,6 +20,7 @@ import {
   Skeleton,
   CircularProgress,
   TableSortLabel,
+  Rating,
 } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import QrCode2Icon from "@mui/icons-material/QrCode2";
@@ -31,6 +32,7 @@ import RefreshRoundedIcon from "@mui/icons-material/RefreshRounded";
 import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import ContentCopyRoundedIcon from "@mui/icons-material/ContentCopyRounded";
 import CheckRoundedIcon from "@mui/icons-material/CheckRounded";
+import StarRoundedIcon from "@mui/icons-material/StarRounded";
 
 // Barcode scanner keyboard listener
 function listenToKeyboardInput(callback) {
@@ -217,6 +219,44 @@ export default function Orders() {
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [selectedCancelOrder, setSelectedCancelOrder] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Student Rating Modal State
+  const [ratingModalOpen, setRatingModalOpen] = useState(false);
+  const [selectedItemForRating, setSelectedItemForRating] = useState(null);
+  const [userRatingVal, setUserRatingVal] = useState(5);
+  const [submittingRating, setSubmittingRating] = useState(false);
+
+  const handleOpenRateDish = (itemObj) => {
+    setSelectedItemForRating(itemObj);
+    setUserRatingVal(5);
+    setRatingModalOpen(true);
+  };
+
+  const handleSubmitItemRating = async () => {
+    if (!selectedItemForRating) return;
+    const foodId = selectedItemForRating._id || selectedItemForRating.id || selectedItemForRating.foodId;
+    if (!foodId) {
+      enqueueSnackbar("Food ID not found for rating", { variant: "error" });
+      return;
+    }
+    try {
+      setSubmittingRating(true);
+      const res = await post("/food/rateFood", {
+        foodId,
+        rating: userRatingVal,
+      });
+      if (res?.success || res?.status === 200) {
+        enqueueSnackbar(`Rated ${selectedItemForRating.itemname || "dish"} ${userRatingVal} stars!`, { variant: "success" });
+        setRatingModalOpen(false);
+      } else {
+        enqueueSnackbar(res?.message || "Failed to submit rating", { variant: "error" });
+      }
+    } catch (e) {
+      enqueueSnackbar("Error submitting rating", { variant: "error" });
+    } finally {
+      setSubmittingRating(false);
+    }
+  };
 
   // Fetch real order graph statistics for admin view
   const fetchGraphCards = useCallback(async (isSilent = false) => {
@@ -1136,7 +1176,7 @@ export default function Orders() {
                             gap: 0.8,
                           }}
                         >
-                          <Tooltip title="View Order Details & Receipt">
+                          <Tooltip title="View Order Receipt">
                             <IconButton
                               size="small"
                               onClick={() => handleOpenOrderPopup(order)}
@@ -1158,6 +1198,18 @@ export default function Orders() {
                             </Tooltip>
                           )}
 
+                          {!isAdminOrStaff && (
+                            <Tooltip title="Rate Ordered Dishes">
+                              <IconButton
+                                size="small"
+                                onClick={() => handleOpenOrderPopup(order)}
+                                sx={{ color: "#f59e0b", "&:hover": { bgcolor: "#fffbeb" } }}
+                              >
+                                <StarRoundedIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+
                           {isAdminOrStaff && orderStatus === "pending" && (
                             <Tooltip title="Mark as Preparing">
                               <IconButton
@@ -1172,7 +1224,7 @@ export default function Orders() {
                           )}
 
                           {isAdminOrStaff && orderStatus === "preparing" && (
-                            <Tooltip title="Mark as Fulfilled / Completed">
+                            <Tooltip title="Mark as  Completed">
                               <IconButton
                                 size="small"
                                 onClick={() => handleMarkCompleted(order.orderNumber)}
@@ -1308,6 +1360,64 @@ export default function Orders() {
                   {copiedOrderId ? "Copied!" : "Copy Order ID"}
                 </Button>
               </Box>
+
+              {/* Ordered Items with Rating Option for Students */}
+              <Box sx={{ mb: 2 }}>
+                <Typography sx={{ fontWeight: 700, fontSize: "0.88rem", color: "#0f172a", mb: 1 }}>
+                  Ordered Items
+                </Typography>
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                  {Array.isArray(selectedOrderPopup.items) && selectedOrderPopup.items.map((it, idx) => {
+                    const itName = typeof it === "object" ? (it.itemname || it.name || "Dish") : String(it);
+                    return (
+                      <Box
+                        key={idx}
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          p: 1.2,
+                          backgroundColor: "#f8fafc",
+                          borderRadius: "10px",
+                          border: "1px solid #e2e8f0",
+                        }}
+                      >
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                          <Typography sx={{ fontWeight: 700, fontSize: "0.85rem", color: "#1e293b", textTransform: "capitalize" }}>
+                            {itName}
+                          </Typography>
+                          {it.quantity && (
+                            <Typography sx={{ fontSize: "0.75rem", color: "#64748b" }}>
+                              x{it.quantity}
+                            </Typography>
+                          )}
+                        </Box>
+                        {!isAdminOrStaff && typeof it === "object" && (it._id || it.foodId) && (
+                          <Button
+                            size="small"
+                            onClick={() => handleOpenRateDish(it)}
+                            startIcon={<StarRoundedIcon sx={{ color: "#f59e0b" }} />}
+                            sx={{
+                              textTransform: "none",
+                              fontSize: "0.76rem",
+                              fontWeight: 700,
+                              color: "#92400e",
+                              backgroundColor: "#fffbeb",
+                              border: "1px solid #fef3c7",
+                              borderRadius: "7px",
+                              py: 0.3,
+                              px: 1,
+                              "&:hover": { backgroundColor: "#fef3c7" },
+                            }}
+                          >
+                            Rate
+                          </Button>
+                        )}
+                      </Box>
+                    );
+                  })}
+                </Box>
+              </Box>
             </Box>
           )}
 
@@ -1433,6 +1543,56 @@ export default function Orders() {
             }}
           >
             {actionLoading ? "Cancelling..." : "Confirm Cancellation"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* 7. STUDENT FOOD RATING DIALOG */}
+      <Dialog
+        open={ratingModalOpen}
+        onClose={() => setRatingModalOpen(false)}
+        PaperProps={{ sx: { borderRadius: "16px", p: 1, maxWidth: "380px", width: "100%" } }}
+      >
+        <DialogTitle sx={{ fontWeight: 700, fontSize: "1.1rem", color: "#0f172a", pb: 0.5, textTransform: "capitalize" }}>
+          Rate {selectedItemForRating?.itemname || "Dish"}
+        </DialogTitle>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", alignItems: "center", py: 2 }}>
+          <Typography sx={{ fontSize: "0.88rem", color: "#64748b", mb: 1.5, textAlign: "center" }}>
+            How would you rate this food item?
+          </Typography>
+          <Rating
+            name="orders-food-rating"
+            value={userRatingVal}
+            precision={1}
+            size="large"
+            onChange={(event, newValue) => {
+              if (newValue !== null) setUserRatingVal(newValue);
+            }}
+            sx={{ fontSize: "2.3rem", color: "#f59e0b", mb: 1.5 }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => setRatingModalOpen(false)}
+            disabled={submittingRating}
+            sx={{ textTransform: "none", color: "#64748b", fontWeight: 600, borderRadius: "8px" }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleSubmitItemRating}
+            disabled={submittingRating}
+            sx={{
+              textTransform: "none",
+              fontWeight: 600,
+              borderRadius: "8px",
+              backgroundColor: "#2563eb",
+              "&:hover": { backgroundColor: "#1d4ed8" },
+              px: 2.5,
+            }}
+          >
+            {submittingRating ? "Submitting..." : "Submit Rating"}
           </Button>
         </DialogActions>
       </Dialog>

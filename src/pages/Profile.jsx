@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect, useRef } from "react";
-import { post, postForm } from "../utils/api";
+import { get, post, postForm } from "../utils/api";
 import { CartContext } from "../context/CartContext";
 import { openRazorpay } from "./Cart";
 import { useSnackbar } from "../hooks/useSnackbar";
@@ -97,6 +97,12 @@ export default function UserProfile() {
   const [addSaving, setAddSaving] = useState(false);
   const [addError, setAddError] = useState("");
 
+  // Wallet Withdraw state (Admin only)
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [withdrawSaving, setWithdrawSaving] = useState(false);
+  const [withdrawError, setWithdrawError] = useState("");
+
   // Quick Action Dialogs
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [newPassword, setNewPassword] = useState("");
@@ -162,6 +168,18 @@ export default function UserProfile() {
   const [notifOrder, setNotifOrder] = useState(true);
   const [notifWallet, setNotifWallet] = useState(true);
   const [notifPromo, setNotifPromo] = useState(false);
+
+  useEffect(() => {
+    async function syncLatestProfile() {
+      try {
+        const res = await get("/users/getMe");
+        if (res && res.success && res.data?.user) {
+          login(res.data.user);
+        }
+      } catch (e) {}
+    }
+    syncLatestProfile();
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -298,9 +316,55 @@ export default function UserProfile() {
     }
   }
 
-  const walletBalance = Number(user?.walletBalance ?? 1780);
+  // Handle Withdraw from Wallet (Razorpay) for Admin
+  async function handleWithdraw(customAmount) {
+    setWithdrawError("");
+    const amountVal = customAmount !== undefined ? customAmount : withdrawAmount;
+    const amountNum = Number(String(amountVal).replace(/[^0-9.]/g, ""));
+    if (!amountNum || amountNum <= 0) {
+      setWithdrawError("Please enter a valid amount");
+      enqueueSnackbar("Please enter a valid amount", { variant: "error" });
+      return;
+    }
+
+    if (amountNum > walletBalance) {
+      setWithdrawError(`Cannot withdraw more than available balance (₹${walletBalance})`);
+      enqueueSnackbar(`Cannot withdraw more than available balance (₹${walletBalance})`, { variant: "error" });
+      return;
+    }
+
+    setWithdrawSaving(true);
+    try {
+      // 1. Show Razorpay popup (dummy gateway popup; resolves on payment or dismiss)
+      await openRazorpay(amountNum, "Admin Wallet Withdrawal");
+
+      // 2. Automatically deduct from admin's wallet on close of Razorpay popup
+      const res = await post("/users/withdrawAmount", {
+        userId: user?._id,
+        amount: amountNum,
+      });
+
+      const newBalance = res?.data?.newBalance !== undefined
+        ? res.data.newBalance
+        : Math.max(0, walletBalance - amountNum);
+
+      login({ ...user, walletBalance: newBalance });
+      setWithdrawOpen(false);
+      setWithdrawAmount("");
+      enqueueSnackbar(`₹${amountNum} withdrawn from wallet successfully!`, { variant: "success" });
+    } catch (err) {
+      const errorMsg = err?.response?.data?.message || err?.message || "Failed to process withdrawal";
+      setWithdrawError(errorMsg);
+      enqueueSnackbar(errorMsg, { variant: "error" });
+    } finally {
+      setWithdrawSaving(false);
+    }
+  }
+
+  const walletBalance = Number(user?.walletBalance ?? 0);
   const rawRole = String(user?.role || "student").toLowerCase();
-  const roleDisplay = rawRole.includes("admin")
+  const isAdmin = rawRole.includes("admin");
+  const roleDisplay = isAdmin
     ? "Admin"
     : rawRole.includes("staff")
       ? "Staff"
@@ -683,34 +747,67 @@ export default function UserProfile() {
                 </Box>
 
                 <Box sx={{ mt: "auto", pt: { xs: 2, sm: 2.5 } }}>
-                  <Button
-                    onClick={() => {
-                      setAddAmount("");
-                      setAddMoneyOpen(true);
-                    }}
-                    variant="outlined"
-                    sx={{
-                      backgroundColor: "rgba(255, 255, 255, 0.16)",
-                      border: "1px solid rgba(255, 255, 255, 0.45)",
-                      color: "#ffffff",
-                      textTransform: "none",
-                      fontWeight: 500,
-                      fontSize: "0.86rem",
-                      borderRadius: "8px",
-                      px: 2.4,
-                      py: 0.65,
-                      boxShadow: "none",
-                      backdropFilter: "blur(4px)",
-                      transition: "all 0.2s ease",
-                      "&:hover": {
-                        backgroundColor: "rgba(255, 255, 255, 0.28)",
-                        borderColor: "#ffffff",
+                  {isAdmin ? (
+                    <Button
+                      onClick={() => {
+                        setWithdrawAmount("");
+                        setWithdrawError("");
+                        setWithdrawOpen(true);
+                      }}
+                      variant="outlined"
+                      sx={{
+                        backgroundColor: "rgba(255, 255, 255, 0.18)",
+                        border: "1px solid rgba(255, 255, 255, 0.55)",
+                        color: "#ffffff",
+                        textTransform: "none",
+                        fontWeight: 700,
+                        fontSize: "0.88rem",
+                        borderRadius: "8px",
+                        px: 2.6,
+                        py: 0.7,
                         boxShadow: "none",
-                      },
-                    }}
-                  >
-                    Add Funds
-                  </Button>
+                        backdropFilter: "blur(4px)",
+                        transition: "all 0.2s ease",
+                        "&:hover": {
+                          backgroundColor: "rgba(255, 255, 255, 0.32)",
+                          borderColor: "#ffffff",
+                          boxShadow: "none",
+                        },
+                      }}
+                    >
+                      Withdraw
+                    </Button>
+                  ) : (
+                    <Button
+                      onClick={() => {
+                        setAddAmount("");
+                        setAddError("");
+                        setAddMoneyOpen(true);
+                      }}
+                      variant="outlined"
+                      sx={{
+                        backgroundColor: "rgba(255, 255, 255, 0.16)",
+                        border: "1px solid rgba(255, 255, 255, 0.45)",
+                        color: "#ffffff",
+                        textTransform: "none",
+                        fontWeight: 500,
+                        fontSize: "0.86rem",
+                        borderRadius: "8px",
+                        px: 2.4,
+                        py: 0.65,
+                        boxShadow: "none",
+                        backdropFilter: "blur(4px)",
+                        transition: "all 0.2s ease",
+                        "&:hover": {
+                          backgroundColor: "rgba(255, 255, 255, 0.28)",
+                          borderColor: "#ffffff",
+                          boxShadow: "none",
+                        },
+                      }}
+                    >
+                      Add Funds
+                    </Button>
+                  )}
                 </Box>
               </Box>
 
@@ -1219,6 +1316,132 @@ export default function UserProfile() {
             }}
           >
             {addSaving ? "Processing..." : "Pay via Razorpay"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* A2. WITHDRAW FUNDS DIALOG (ADMIN ONLY) */}
+      <Dialog
+        open={withdrawOpen}
+        onClose={() => !withdrawSaving && setWithdrawOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: "20px", p: 1.5 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, color: "#0f172a", fontSize: "1.25rem", pb: 0.5 }}>
+          Withdraw Funds
+        </DialogTitle>
+        <DialogContent>
+          <Typography sx={{ color: "#64748b", fontSize: "0.86rem", mb: 2 }}>
+            Withdraw your canteen revenue to your account via Razorpay.
+          </Typography>
+
+          <Box
+            sx={{
+              p: 1.8,
+              mb: 2.5,
+              borderRadius: "12px",
+              backgroundColor: "#eff6ff",
+              border: "1px solid #bfdbfe",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <Typography sx={{ fontSize: "0.85rem", fontWeight: 600, color: "#1e40af" }}>
+              Available Balance:
+            </Typography>
+            <Typography sx={{ fontSize: "1.1rem", fontWeight: 800, color: "#1d4ed8" }}>
+              ₹{walletBalance.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </Typography>
+          </Box>
+
+          {/* Quick preset amount chips */}
+          <Typography sx={{ fontSize: "0.78rem", fontWeight: 700, color: "#64748b", mb: 1, textTransform: "uppercase" }}>
+            Quick Select
+          </Typography>
+          <Stack direction="row" spacing={1} sx={{ mb: 2.5, flexWrap: "wrap", gap: 0.8 }}>
+            {[500, 1000, 2000].filter((amt) => amt <= walletBalance).map((amt) => (
+              <Chip
+                key={amt}
+                label={`₹${amt}`}
+                onClick={() => setWithdrawAmount(String(amt))}
+                sx={{
+                  fontWeight: 700,
+                  fontSize: "0.82rem",
+                  cursor: "pointer",
+                  bgcolor: withdrawAmount === String(amt) ? "#eff6ff" : "#f8fafc",
+                  color: withdrawAmount === String(amt) ? "#2563eb" : "#334155",
+                  borderColor: withdrawAmount === String(amt) ? "#3b82f6" : "#e2e8f0",
+                  borderWidth: 1,
+                  borderStyle: "solid",
+                  "&:hover": { bgcolor: "#eff6ff" },
+                }}
+              />
+            ))}
+            {walletBalance > 0 && (
+              <Chip
+                label={`All (₹${walletBalance})`}
+                onClick={() => setWithdrawAmount(String(walletBalance))}
+                sx={{
+                  fontWeight: 700,
+                  fontSize: "0.82rem",
+                  cursor: "pointer",
+                  bgcolor: withdrawAmount === String(walletBalance) ? "#eff6ff" : "#f8fafc",
+                  color: withdrawAmount === String(walletBalance) ? "#2563eb" : "#334155",
+                  borderColor: withdrawAmount === String(walletBalance) ? "#3b82f6" : "#e2e8f0",
+                  borderWidth: 1,
+                  borderStyle: "solid",
+                  "&:hover": { bgcolor: "#eff6ff" },
+                }}
+              />
+            )}
+          </Stack>
+
+          <TextField
+            autoFocus
+            label="Withdraw Amount (₹)"
+            type="number"
+            fullWidth
+            value={withdrawAmount}
+            onChange={(e) => setWithdrawAmount(e.target.value)}
+            error={Boolean(withdrawError)}
+            helperText={withdrawError || `Max withdrawable: ₹${walletBalance}`}
+            disabled={withdrawSaving}
+            sx={{
+              "& .MuiOutlinedInput-root": {
+                borderRadius: "14px",
+                "&.Mui-focused fieldset": { borderColor: "#0088ff" },
+              },
+            }}
+          />
+        </DialogContent>
+        <DialogActions sx={{ p: 2, pt: 1 }}>
+          <Button
+            onClick={() => setWithdrawOpen(false)}
+            disabled={withdrawSaving}
+            sx={{ textTransform: "none", fontWeight: 600, color: "#64748b" }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={() => handleWithdraw()}
+            variant="contained"
+            disabled={withdrawSaving || !withdrawAmount || Number(withdrawAmount) <= 0 || Number(withdrawAmount) > walletBalance}
+            startIcon={withdrawSaving ? <CircularProgress size={18} color="inherit" /> : null}
+            sx={{
+              background: "#0088ff",
+              textTransform: "none",
+              fontWeight: 700,
+              borderRadius: "10px",
+              px: 3,
+              py: 1,
+              "&:hover": {
+                background: "#0070d6",
+              },
+            }}
+          >
+            {withdrawSaving ? "Processing..." : "Withdraw via Razorpay"}
           </Button>
         </DialogActions>
       </Dialog>

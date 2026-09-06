@@ -7,7 +7,7 @@
 
 // import { useContext, useState } from "react";
 // import { CartContext } from "../context/CartContext";
-import { useContext, useState } from "react";
+import { useContext, useState, useMemo } from "react";
 import { CartContext } from "../context/CartContext";
 import { post, postForm } from "../utils/api";
 import { useSnackbar } from "../hooks/useSnackbar";
@@ -26,9 +26,11 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Rating,
 } from "@mui/material";
 import AddShoppingCartIcon from "@mui/icons-material/AddShoppingCart";
 import DeleteIcon from "@mui/icons-material/Delete";
+import StarRoundedIcon from "@mui/icons-material/StarRounded";
 
 export default function FoodCard({ item, onAdd, onRemove, onUpdate }) {
   const { user, cart, increaseQuantity, decreaseQuantity } = useContext(CartContext);
@@ -53,6 +55,51 @@ export default function FoodCard({ item, onAdd, onRemove, onUpdate }) {
   const [secretDialog, setSecretDialog] = useState(false);
   const [secretInput, setSecretInput] = useState("");
   const [pendingDelete, setPendingDelete] = useState(null);
+
+  // Rating Modal State
+  const [ratingModal, setRatingModal] = useState(false);
+  const [ratingVal, setRatingVal] = useState(5);
+  const [submittingRate, setSubmittingRate] = useState(false);
+
+  const avgRating = useMemo(() => {
+    if (typeof item.averageRating === "number" && item.averageRating > 0) {
+      return item.averageRating.toFixed(1);
+    }
+    if (Array.isArray(item.ratings) && item.ratings.length > 0) {
+      const sum = item.ratings.reduce((s, r) => s + (Number(r.rating) || 0), 0);
+      return (sum / item.ratings.length).toFixed(1);
+    }
+    if (item.rating) return Number(item.rating).toFixed(1);
+    return "0.0";
+  }, [item]);
+
+  async function submitFoodRating() {
+    try {
+      setSubmittingRate(true);
+      const res = await post("/food/rateFood", {
+        foodId: item._id,
+        rating: ratingVal,
+      });
+      if (res?.status === 200 || res?.success) {
+        enqueueSnackbar(`Rated ${item.itemname} ${ratingVal} stars!`, { variant: "success" });
+        if (typeof onUpdate === "function") {
+          onUpdate({
+            ...item,
+            averageRating: res.data?.averageRating ?? ratingVal,
+            totalRatings: res.data?.totalRatings ?? ((item.totalRatings || 0) + 1),
+            ratings: res.data?.ratings ?? item.ratings,
+          });
+        }
+        setRatingModal(false);
+      } else {
+        enqueueSnackbar(res?.message || "Failed to rate item", { variant: "error" });
+      }
+    } catch (e) {
+      enqueueSnackbar("Failed to rate item", { variant: "error" });
+    } finally {
+      setSubmittingRate(false);
+    }
+  }
 
   async function updateItem() {
     setLoading(true);
@@ -194,8 +241,63 @@ export default function FoodCard({ item, onAdd, onRemove, onUpdate }) {
       <CardContent sx={{ flex: 1, display: "flex", flexDirection: "column", gap: 0.75, p: 1.5, pb: 0.75 }}>
         {!editing ? (
           <>
+            {/* Category and Average Rating row */}
+            <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mb: 0.2 }}>
+              <Box
+                sx={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  px: 0.85,
+                  py: 0.2,
+                  borderRadius: "5px",
+                  backgroundColor: "#F1F5F9",
+                  color: "#475569",
+                  fontSize: "0.68rem",
+                  fontWeight: 700,
+                  letterSpacing: "0.03em",
+                  textTransform: "uppercase",
+                }}
+              >
+                {item.category || "General"}
+              </Box>
+
+              <Tooltip title="Click to rate this dish" arrow>
+                <Box
+                  onClick={() => {
+                    setRatingVal(5);
+                    setRatingModal(true);
+                  }}
+                  sx={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 0.35,
+                    cursor: "pointer",
+                    px: 0.75,
+                    py: 0.2,
+                    borderRadius: "6px",
+                    backgroundColor: "#FFFBEB",
+                    border: "1px solid #FEF3C7",
+                    transition: "all 0.15s ease",
+                    "&:hover": {
+                      backgroundColor: "#FEF3C7",
+                      borderColor: "#FDE68A",
+                      transform: "scale(1.04)",
+                    },
+                  }}
+                >
+                  <StarRoundedIcon sx={{ color: "#F59E0B", fontSize: 16 }} />
+                  <Typography sx={{ fontSize: "0.78rem", fontWeight: 700, color: "#92400E" }}>
+                    {avgRating}
+                  </Typography>
+                  <Typography sx={{ fontSize: "0.68rem", fontWeight: 500, color: "#B45309" }}>
+                    ({item.totalRatings || (Array.isArray(item.ratings) ? item.ratings.length : 0)})
+                  </Typography>
+                </Box>
+              </Tooltip>
+            </Box>
+
             <Box>
-              <Typography variant="h6" fontWeight={800} sx={{ lineHeight: 1.2, fontSize: "1rem", minHeight: 28 }}>
+              <Typography variant="h6" fontWeight={800} sx={{ lineHeight: 1.2, fontSize: "1rem", minHeight: 28, textTransform: "capitalize" }}>
                 {item.itemname}
               </Typography>
             </Box>
@@ -485,6 +587,90 @@ export default function FoodCard({ item, onAdd, onRemove, onUpdate }) {
           <Button onClick={() => setSecretDialog(false)}>Cancel</Button>
           <Button variant="contained" color="error" onClick={confirmSecretCode}>
             Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* User Food Rating Dialog */}
+      <Dialog
+        open={ratingModal}
+        onClose={() => setRatingModal(false)}
+        PaperProps={{
+          sx: {
+            borderRadius: "16px",
+            p: 1,
+            maxWidth: "360px",
+            width: "100%",
+          },
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 700, fontSize: "1.05rem", color: "#0F172A", pb: 0.5 }}>
+          Rate {item.itemname}
+        </DialogTitle>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", alignItems: "center", py: 2 }}>
+          {item.image && (
+            <Box
+              component="img"
+              src={item.image}
+              alt={item.itemname}
+              sx={{
+                width: 75,
+                height: 75,
+                borderRadius: "10px",
+                objectFit: "cover",
+                mb: 1.5,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+              }}
+            />
+          )}
+          <Typography sx={{ fontSize: "0.86rem", color: "#64748B", mb: 1, textAlign: "center" }}>
+            How would you rate this dish?
+          </Typography>
+          <Rating
+            name="foodcard-rating"
+            value={ratingVal}
+            precision={1}
+            size="large"
+            onChange={(event, newValue) => {
+              if (newValue !== null) setRatingVal(newValue);
+            }}
+            sx={{
+              fontSize: "2.2rem",
+              color: "#F59E0B",
+              mb: 1.5,
+            }}
+          />
+          <Typography sx={{ fontSize: "0.78rem", color: "#94A3B8" }}>
+            Current Average: {avgRating} ★ ({item.totalRatings || (Array.isArray(item.ratings) ? item.ratings.length : 0)} reviews)
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => setRatingModal(false)}
+            disabled={submittingRate}
+            sx={{
+              textTransform: "none",
+              color: "#64748B",
+              fontWeight: 600,
+              borderRadius: "8px",
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={submitFoodRating}
+            disabled={submittingRate}
+            sx={{
+              textTransform: "none",
+              fontWeight: 600,
+              borderRadius: "8px",
+              backgroundColor: "#2563EB",
+              "&:hover": { backgroundColor: "#1D4ED8" },
+              px: 2.5,
+            }}
+          >
+            {submittingRate ? "Submitting..." : "Submit Rating"}
           </Button>
         </DialogActions>
       </Dialog>

@@ -145,45 +145,7 @@ export default function Login() {
             </Typography>
           </Box>
 
-          {/* Bottom Badges */}
-          <Box sx={{ mt: { xs: 5, md: 8 } }}>
-            {/* Avg pickup badge */}
-            <Box
-              sx={{
-                display: "flex",
-                alignItems: "center",
-                gap: 1.5,
-                background: "rgba(255, 255, 255, 0.06)",
-                border: "1px solid rgba(255, 255, 255, 0.05)",
-                borderRadius: "12px",
-                py: 1.4,
-                px: 2,
-                mb: 1.4,
-                backdropFilter: "blur(6px)",
-              }}
-            >
-              <AccessTimeIcon sx={{ color: "#E8BAAF", fontSize: 19 }} />
-              <Typography sx={{ color: "#F0D3CB", fontSize: "14px", fontWeight: 500 }}>
-                Avg. pickup time: 6 min
-              </Typography>
-            </Box>
-
-            {/* Specials badge */}
-            <Box
-              sx={{
-                background: "rgba(255, 255, 255, 0.06)",
-                border: "1px solid rgba(255, 255, 255, 0.05)",
-                borderRadius: "12px",
-                py: 1.4,
-                px: 2,
-                backdropFilter: "blur(6px)",
-              }}
-            >
-              <Typography sx={{ color: "#F0D3CB", fontSize: "14px", fontWeight: 500 }}>
-                Today's specials updated daily
-              </Typography>
-            </Box>
-          </Box>
+        
         </Box>
 
         {/* Right Dark Form Panel */}

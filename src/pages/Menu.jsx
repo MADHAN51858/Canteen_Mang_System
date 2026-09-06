@@ -47,6 +47,7 @@ import {
   Menu as MuiMenu,
   ListItemIcon,
   ListItemText,
+  Rating,
 } from "@mui/material";
 
 // Icons
@@ -89,6 +90,49 @@ import LocalPizzaOutlinedIcon from "@mui/icons-material/LocalPizzaOutlined";
 import IcecreamOutlinedIcon from "@mui/icons-material/IcecreamOutlined";
 import FastfoodOutlinedIcon from "@mui/icons-material/FastfoodOutlined";
 import BakeryDiningOutlinedIcon from "@mui/icons-material/BakeryDiningOutlined";
+import StarRoundedIcon from "@mui/icons-material/StarRounded";
+import ShoppingBagIcon from "@mui/icons-material/ShoppingBag";
+
+// Standard restaurant veg / non-veg indicator (square with colored circle)
+function RestaurantVegIcon({ isVeg = true, size = 16 }) {
+  const color = isVeg ? "#16a34a" : "#dc2626";
+  return (
+    <Box
+      sx={{
+        width: size,
+        height: size,
+        border: `1.8px solid ${color}`,
+        borderRadius: "3px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        backgroundColor: "#ffffff",
+        boxSizing: "border-box",
+      }}
+      title={isVeg ? "Vegetarian" : "Non-Vegetarian"}
+    >
+      <Box
+        sx={{
+          width: Math.round(size * 0.44),
+          height: Math.round(size * 0.44),
+          borderRadius: "50%",
+          backgroundColor: color,
+        }}
+      />
+    </Box>
+  );
+}
+
+// Automatically calculate offer percentage from original price and current price
+function calculateOfferPercent(orig, curr) {
+  const o = Number(orig) || 0;
+  const c = Number(curr) || 0;
+  if (o > 0 && c > 0 && o > c) {
+    return Math.round(((o - c) / o) * 100);
+  }
+  return 0;
+}
 
 // Fallback culinary images for items without image
 const DEFAULT_IMAGES = {
@@ -269,6 +313,7 @@ export default function Menu() {
   const rawRole = String(user?.role || "student").toLowerCase();
   const isAdminOrStaff = rawRole.includes("admin") || rawRole.includes("staff");
   const currentUsername = String(user?.username || "").toLowerCase();
+  const [cartCollapsed, setCartCollapsed] = useState(false);
 
   // Categories & Foods State
   const [selectedCategory, setSelectedCategory] = useState("all");
@@ -358,6 +403,7 @@ export default function Menu() {
   const [addDishOpen, setAddDishOpen] = useState(false);
   const [addForm, setAddForm] = useState({
     itemname: "",
+    originalPrice: "",
     price: "",
     category: "BreakFast",
     stock: 20,
@@ -376,6 +422,7 @@ export default function Menu() {
   const [editingDish, setEditingDish] = useState(null);
   const [editForm, setEditForm] = useState({
     itemname: "",
+    originalPrice: "",
     price: "",
     category: "BreakFast",
     stock: 0,
@@ -392,6 +439,108 @@ export default function Menu() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [dishToDelete, setDishToDelete] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // Student / User Food Rating State
+  const [ratingDialogOpen, setRatingDialogOpen] = useState(false);
+  const [selectedFoodForRating, setSelectedFoodForRating] = useState(null);
+  const [userRatingScore, setUserRatingScore] = useState(5);
+  const [ratingSubmitting, setRatingSubmitting] = useState(false);
+
+  const openRatingDialog = (food, e) => {
+    if (e) e.stopPropagation();
+    setSelectedFoodForRating(food);
+    setUserRatingScore(5);
+    setRatingDialogOpen(true);
+  };
+
+  const handleRatingSubmit = async () => {
+    if (!selectedFoodForRating || !userRatingScore) return;
+    try {
+      setRatingSubmitting(true);
+      const res = await post("/food/rateFood", {
+        foodId: selectedFoodForRating._id,
+        rating: userRatingScore,
+      });
+
+      if (res?.success || res?.status === 200 || res?.statusCode === 200) {
+        // Update allFoods state locally with the new averageRating and totalRatings
+        try {
+          setAllFoods((prevFoods) =>
+            Array.isArray(prevFoods)
+              ? prevFoods.map((f) => {
+                  if (String(f._id) === String(selectedFoodForRating._id)) {
+                    return {
+                      ...f,
+                      averageRating: res.data?.averageRating ?? userRatingScore,
+                      totalRatings: res.data?.totalRatings ?? ((f.totalRatings || 0) + 1),
+                      ratings: res.data?.ratings ?? f.ratings,
+                    };
+                  }
+                  return f;
+                })
+              : prevFoods
+          );
+        } catch (stateErr) {
+          console.error("State update error:", stateErr);
+        }
+
+        enqueueSnackbar(`Rated ${selectedFoodForRating.itemname} ${userRatingScore} stars!`, {
+          variant: "success",
+        });
+        setRatingDialogOpen(false);
+      } else {
+        enqueueSnackbar(res?.message || "Failed to submit rating", { variant: "error" });
+      }
+    } catch (err) {
+      console.error("Submit rating error:", err);
+      enqueueSnackbar(err?.message || "Error submitting rating", { variant: "error" });
+    } finally {
+      setRatingSubmitting(false);
+    }
+  };
+
+  const handleDirectRate = async (food, newRatingValue, e) => {
+    if (e && e.stopPropagation) e.stopPropagation();
+    if (!food || !newRatingValue) return;
+    try {
+      const res = await post("/food/rateFood", {
+        foodId: food._id,
+        rating: Number(newRatingValue),
+      });
+
+      if (res?.success || res?.status === 200 || res?.statusCode === 200) {
+        // Update allFoods state locally with the new averageRating and totalRatings
+        try {
+          setAllFoods((prevFoods) =>
+            Array.isArray(prevFoods)
+              ? prevFoods.map((f) => {
+                  if (String(f._id) === String(food._id)) {
+                    return {
+                      ...f,
+                      averageRating: res.data?.averageRating ?? newRatingValue,
+                      totalRatings: res.data?.totalRatings ?? ((f.totalRatings || 0) + 1),
+                      ratings: res.data?.ratings ?? f.ratings,
+                    };
+                  }
+                  return f;
+                })
+              : prevFoods
+          );
+        } catch (stateErr) {
+          console.error("State update error:", stateErr);
+        }
+
+        enqueueSnackbar(`Rated ${food.itemname} ${newRatingValue} ★!`, {
+          variant: "success",
+        });
+      } else {
+        enqueueSnackbar(res?.message || "Failed to submit rating", { variant: "error" });
+      }
+    } catch (err) {
+      console.error("Direct rating error:", err);
+      enqueueSnackbar(err?.message || "Error submitting rating", { variant: "error" });
+    }
+  };
 
   const currentRollNo = String(user?.rollNo || "").trim().toLowerCase();
 
@@ -954,6 +1103,7 @@ export default function Menu() {
       const fd = new FormData();
       fd.append("itemname", addForm.itemname.trim().toLowerCase());
       fd.append("price", String(addForm.price));
+      fd.append("originalPrice", String(addForm.originalPrice || addForm.price));
       fd.append("category", addForm.category);
       fd.append("stock", String(Math.max(0, Number(addForm.stock || 0))));
       fd.append("offer", String(Math.max(0, Number(addForm.offer || 0))));
@@ -965,7 +1115,7 @@ export default function Menu() {
       if (res && (res.status === 200 || res.success)) {
         enqueueSnackbar("Product added successfully!", { variant: "success" });
         setAddDishOpen(false);
-        setAddForm({ itemname: "", price: "", category: "BreakFast", stock: 20, offer: 0, isVeg: true, description: "" });
+        setAddForm({ itemname: "", originalPrice: "", price: "", category: "BreakFast", stock: 20, offer: 0, isVeg: true, description: "" });
         setAddImageFile(null);
         await fetchFoods();
       } else {
@@ -981,9 +1131,13 @@ export default function Menu() {
   // 13. Admin Actions: Edit Dish
   const openEditDialog = (food) => {
     setEditingDish(food);
+    const orig = food.originalPrice && food.originalPrice > 0 
+      ? food.originalPrice 
+      : (food.offer > 0 ? Math.round(food.price / (1 - food.offer / 100)) : food.price);
     setEditForm({
       itemname: food.itemname,
-      price: food.price,
+      originalPrice: String(orig || food.price),
+      price: String(food.price),
       category: food.category || "BreakFast",
       stock: food.stock !== undefined ? food.stock : 0,
       offer: food.offer !== undefined ? food.offer : 0,
@@ -1004,6 +1158,7 @@ export default function Menu() {
       fd.append("id", editingDish._id);
       fd.append("itemname", editForm.itemname.trim().toLowerCase());
       fd.append("price", String(editForm.price));
+      fd.append("originalPrice", String(editForm.originalPrice || editForm.price));
       fd.append("category", editForm.category);
       fd.append("stock", String(editForm.stock || 0));
       fd.append("offer", String(Math.max(0, Number(editForm.offer || 0))));
@@ -1614,12 +1769,13 @@ export default function Menu() {
           sx={{
             display: "grid",
             gridTemplateColumns: isAdminOrStaff
-              ? { xs: "1fr", sm: "repeat(2, 1fr)", md: "repeat(3, 1fr)", lg: "repeat(4, 1fr)" }
-              : { xs: "1fr", sm: "repeat(2, 1fr)", md: "repeat(2, 1fr)", lg: "repeat(3, 1fr)" },
-            gap: 2.5,
+              ? "repeat(4, minmax(0, 1fr))"
+              : cartCollapsed
+              ? "repeat(4, minmax(0, 1fr))"
+              : "repeat(3, minmax(0, 1fr))",
+            gap: 2,
             alignItems: "start",
             alignContent: "start",
-            gridAutoRows: "max-content",
             mb: 3,
           }}
         >
@@ -1666,26 +1822,51 @@ export default function Menu() {
               const isVeg = checkIsVeg(food);
               const imageUrl = food.image || getFallbackImage(food.itemname);
               const stock = Number(food.stock || 0);
-              const categoryBadge = getCardCategoryBadge(food, dbCategories);
-              const CategoryBadgeIcon = categoryBadge.icon;
+
+              let avg = 0;
+              let totalCount = 0;
+              if (Array.isArray(food.ratings) && food.ratings.length > 0) {
+                const sum = food.ratings.reduce((s, r) => s + (Number(r.rating) || 0), 0);
+                avg = sum / food.ratings.length;
+                totalCount = food.ratings.length;
+              } else if (typeof food.averageRating === "number" && food.averageRating > 0 && typeof food.totalRatings === "number" && food.totalRatings > 0) {
+                avg = food.averageRating;
+                totalCount = food.totalRatings;
+              }
+              const foodAvgRating = totalCount > 0 && avg > 0 ? (Math.round(avg * 10) / 10).toFixed(1) : null;
+              const foodTotalRatings = totalCount;
+
+              const myRatingObj = Array.isArray(food.ratings)
+                ? food.ratings.find(
+                    (r) =>
+                      r.user &&
+                      (String(r.user._id || r.user) === String(user?._id) ||
+                        (user?.username && String(r.user?.username || "").toLowerCase() === String(user?.username).toLowerCase()))
+                  )
+                : null;
+              const myRating = myRatingObj ? Number(myRatingObj.rating) : 0;
+
+              const origPrice = food.originalPrice && food.originalPrice > food.price 
+                ? food.originalPrice 
+                : (food.offer > 0 ? Math.round(food.price / (1 - food.offer / 100)) : 0);
 
               return (
                 <Box
                   key={food._id}
                   sx={{
                     backgroundColor: "#ffffff",
-                    borderRadius: "22px",
+                    borderRadius: "20px",
                     p: 1.6,
                     border: !isAdminOrStaff && isInCart ? "2px solid #22c55e" : "1px solid #f1f5f9",
                     boxShadow: !isAdminOrStaff && isInCart
                       ? "0 8px 24px rgba(34, 197, 94, 0.12)"
-                      : "0 2px 10px rgba(0,0,0,0.03)",
+                      : "0 2px 12px rgba(0,0,0,0.03)",
                     display: "flex",
                     flexDirection: "column",
                     position: "relative",
                     transition: "all 0.2s ease",
                     "&:hover": {
-                      boxShadow: "0 8px 26px rgba(0,0,0,0.06)",
+                      boxShadow: "0 8px 26px rgba(0,0,0,0.07)",
                       transform: "translateY(-2px)",
                     },
                   }}
@@ -1695,14 +1876,14 @@ export default function Menu() {
                     sx={{
                       position: "relative",
                       width: "100%",
-                      height: 155,
-                      borderRadius: "16px",
+                      height: 160,
+                      borderRadius: "14px",
                       overflow: "hidden",
-                      mb: 1.2,
+                      mb: 1.4,
                       backgroundColor: "#f8fafc",
                     }}
                   >
-                    {/* Discount Tag (Top-Left) - Only when offer > 0 from database */}
+                    {/* Discount Tag (Top-Left) */}
                     {Number(food.offer || 0) > 0 && (
                       <Box
                         sx={{
@@ -1714,10 +1895,9 @@ export default function Menu() {
                           fontWeight: 800,
                           fontSize: "0.72rem",
                           px: 1.1,
-                          py: 0.35,
+                          py: 0.4,
                           borderRadius: "100px",
                           zIndex: 1,
-                          letterSpacing: 0.2,
                           display: "flex",
                           alignItems: "center",
                           gap: 0.4,
@@ -1725,7 +1905,7 @@ export default function Menu() {
                         }}
                       >
                         <SellOutlinedIcon sx={{ fontSize: 13 }} />
-                        {Number(food.offer)}% Off
+                        {Number(food.offer)}% OFF
                       </Box>
                     )}
 
@@ -1735,22 +1915,22 @@ export default function Menu() {
                         position: "absolute",
                         top: 10,
                         right: 10,
-                        backgroundColor: stock > 0 ? "#047857" : "#b91c1c",
+                        backgroundColor: stock > 0 ? "rgba(15, 23, 42, 0.72)" : "#b91c1c",
+                        backdropFilter: "blur(4px)",
                         color: "#ffffff",
-                        fontWeight: 800,
+                        fontWeight: 700,
                         fontSize: "0.72rem",
                         px: 1.1,
-                        py: 0.35,
+                        py: 0.4,
                         borderRadius: "100px",
                         zIndex: 1,
                         display: "flex",
                         alignItems: "center",
                         gap: 0.4,
-                        boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
                       }}
                     >
                       <Inventory2OutlinedIcon sx={{ fontSize: 13 }} />
-                      {stock > 0 ? `Stock: ${stock}` : "Stock: 0"}
+                      {stock > 0 ? `${stock} left` : "Out of stock"}
                     </Box>
 
                     {/* Food Image */}
@@ -1768,8 +1948,8 @@ export default function Menu() {
                   </Box>
 
                   {/* Food Content */}
-                  <Box sx={{ mb: 1.5 }}>
-                    {/* Row 1: Name on Left, Veg / Non-Veg on Right */}
+                  <Box sx={{ mb: 1.4, flex: 1, display: "flex", flexDirection: "column" }}>
+                    {/* Row 1: Name on Left, Category + Restaurant Veg/Non-Veg icon TOGETHER on Right */}
                     <Box
                       sx={{
                         display: "flex",
@@ -1781,9 +1961,9 @@ export default function Menu() {
                       <Typography
                         sx={{
                           fontWeight: 800,
-                          fontSize: "1rem",
+                          fontSize: "1.08rem",
                           color: "#0f172a",
-                          lineHeight: 1.2,
+                          lineHeight: 1.25,
                           textTransform: "capitalize",
                           whiteSpace: "nowrap",
                           overflow: "hidden",
@@ -1794,70 +1974,157 @@ export default function Menu() {
                         {food.itemname}
                       </Typography>
 
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.6, flexShrink: 0 }}>
-                        <FiberManualRecordIcon
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, flexShrink: 0 }}>
+                        <Box
                           sx={{
-                            fontSize: 9,
-                            color: isVeg ? "#16a34a" : "#dc2626",
-                          }}
-                        />
-                        <Typography
-                          sx={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            px: 1,
+                            py: 0.3,
+                            borderRadius: "100px",
+                            backgroundColor: "#f1f5f9",
+                            color: "#475569",
+                            fontSize: "0.72rem",
                             fontWeight: 700,
-                            fontSize: "0.78rem",
-                            color: isVeg ? "#16a34a" : "#dc2626",
+                            textTransform: "capitalize",
                           }}
                         >
-                          {isVeg ? "Veg" : "Non Veg"}
-                        </Typography>
+                          {food.category || "General"}
+                        </Box>
+                        <RestaurantVegIcon isVeg={isVeg} size={16} />
                       </Box>
                     </Box>
 
-                    {/* Row 2: Category on Left, Price on Right (directly below Veg) */}
+                    {/* Row 2: Stars (Left) & Average Rating (Right) — Same layout for all users */}
                     <Box
                       sx={{
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "space-between",
-                        mt: 0.5,
+                        py: 0.2,
+                        mb: 0.8,
+                        minHeight: 28,
                       }}
                     >
+                      {/* Left: Read-only avg stars for Admin/Staff; Interactive stars for Students */}
+                      {isAdminOrStaff ? (
+                        <Tooltip
+                          title={
+                            foodTotalRatings > 0
+                              ? `Average: ${foodAvgRating} ★ (${foodTotalRatings} reviews)`
+                              : "No ratings yet"
+                          }
+                          arrow
+                          placement="top"
+                        >
+                          <Box sx={{ display: "inline-flex", alignItems: "center" }}>
+                            <Rating
+                              name={`avg-food-${food._id}`}
+                              value={foodAvgRating ? Number(foodAvgRating) : 0}
+                              precision={0.5}
+                              readOnly
+                              size="small"
+                              sx={{
+                                color: "#f59e0b",
+                                fontSize: "1.15rem",
+                                "& .MuiRating-iconEmpty": { color: "#cbd5e1" },
+                              }}
+                            />
+                          </Box>
+                        </Tooltip>
+                      ) : (
+                        <Tooltip
+                          title={myRating > 0 ? `Your rating: ${myRating} ★ (Click to change)` : "Click a star to rate"}
+                          arrow
+                          placement="top"
+                        >
+                          <Box sx={{ display: "inline-flex", alignItems: "center" }}>
+                            <Rating
+                              name={`rate-food-${food._id}`}
+                              value={myRating}
+                              precision={1}
+                              onChange={(e, val) => handleDirectRate(food, val, e)}
+                              size="small"
+                              sx={{
+                                color: "#f59e0b",
+                                fontSize: "1.15rem",
+                                "& .MuiRating-iconEmpty": { color: "#cbd5e1" },
+                              }}
+                            />
+                          </Box>
+                        </Tooltip>
+                      )}
+
+                      {/* Right: Average rating chip — same for all users */}
                       <Box
+                        onClick={(e) => !isAdminOrStaff && openRatingDialog(food, e)}
                         sx={{
+                          cursor: isAdminOrStaff ? "default" : "pointer",
                           display: "inline-flex",
                           alignItems: "center",
-                          gap: 0.6,
-                          px: 1.2,
-                          py: 0.35,
-                          borderRadius: "100px",
-                          backgroundColor: "#ecfdf5",
-                          border: "1px solid #d1fae5",
-                          color: "#065f46",
-                          fontSize: "0.74rem",
-                          fontWeight: 700,
+                          px: 0.6,
+                          py: 0.2,
+                          borderRadius: "6px",
+                          transition: "background-color 0.15s ease",
+                          "&:hover": { backgroundColor: isAdminOrStaff ? "transparent" : "#f1f5f9" },
                         }}
                       >
-                        <CategoryBadgeIcon sx={{ fontSize: 14 }} />
-                        {categoryBadge.label}
+                        {foodTotalRatings > 0 ? (
+                          <Typography
+                            sx={{
+                              fontSize: "0.82rem",
+                              fontWeight: 700,
+                              color: "#1e293b",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 0.3,
+                            }}
+                          >
+                            <StarRoundedIcon sx={{ color: "#f59e0b", fontSize: 16 }} />
+                            {foodAvgRating}
+                            <Box component="span" sx={{ color: "#64748b", fontWeight: 500, fontSize: "0.74rem" }}>
+                              ({foodTotalRatings})
+                            </Box>
+                          </Typography>
+                        ) : (
+                          <Typography sx={{ fontSize: "0.76rem", fontWeight: 600, color: "#94a3b8" }}>
+                            No ratings yet
+                          </Typography>
+                        )}
                       </Box>
+                    </Box>
 
-                      <Typography sx={{ fontWeight: 900, fontSize: "1.15rem", color: "#047857" }}>
-                        ₹{Number(food.price || 0).toFixed(2)}
+                    {/* Row 3: Price (Current Price large + Original Price crossed out) */}
+                    <Box sx={{ display: "flex", alignItems: "baseline", gap: 1, mt: "auto" }}>
+                      <Typography sx={{ fontWeight: 900, fontSize: "1.32rem", color: "#0f172a" }}>
+                        ₹{Number(food.price || 0).toFixed(0)}
                       </Typography>
+                      {origPrice > food.price && (
+                        <Typography
+                          sx={{
+                            fontWeight: 600,
+                            fontSize: "0.95rem",
+                            color: "#94a3b8",
+                            textDecoration: "line-through",
+                          }}
+                        >
+                          ₹{Number(origPrice).toFixed(0)}
+                        </Typography>
+                      )}
                     </Box>
                   </Box>
 
-                  {/* ADMIN VIEW: 3 Action Icons in Equal Width */}
+                  {/* Bottom Actions — Different per role, SAME card height & structure */}
                   {isAdminOrStaff ? (
+                    /* ADMIN / STAFF: Edit + Stock toggle + Delete */
                     <Box
                       sx={{
                         display: "grid",
                         gridTemplateColumns: "repeat(3, 1fr)",
                         gap: 1,
-                        alignItems: "center",
+                        mt: 0,
                       }}
                     >
-                      {/* Icon 1: Edit */}
                       <Tooltip title="Edit Dish" arrow>
                         <IconButton
                           size="small"
@@ -1876,11 +2143,7 @@ export default function Menu() {
                         </IconButton>
                       </Tooltip>
 
-                      {/* Icon 2: Mark Out of Stock / Restock */}
-                      <Tooltip
-                        title={stock > 0 ? "Mark as Out of Stock" : "Restock (25 items)"}
-                        arrow
-                      >
+                      <Tooltip title={stock > 0 ? "Mark as Out of Stock" : "Restock (25 items)"} arrow>
                         <IconButton
                           size="small"
                           onClick={() => handleToggleStock(food)}
@@ -1904,7 +2167,6 @@ export default function Menu() {
                         </IconButton>
                       </Tooltip>
 
-                      {/* Icon 3: Delete */}
                       <Tooltip title="Delete Dish" arrow>
                         <IconButton
                           size="small"
@@ -1924,35 +2186,44 @@ export default function Menu() {
                       </Tooltip>
                     </Box>
                   ) : (
-                    /* STUDENT VIEW: Add to Dish OR Quantity Stepper */
+                    /* STUDENT: Add to cart button (icon only) or qty stepper */
                     !isInCart ? (
-                      <Button
-                        fullWidth
-                        onClick={() => handleAddToDish(food)}
-                        sx={{
-                          backgroundColor: "#dcfce7",
-                          color: "#059669",
-                          fontWeight: 700,
-                          fontSize: "0.85rem",
-                          height: 38,
-                          borderRadius: "11px",
-                          textTransform: "none",
-                          boxShadow: "none",
-                          "&:hover": {
-                            backgroundColor: "#bbf7d0",
-                            boxShadow: "none",
-                          },
-                        }}
-                      >
-                        Add to Cart
-                      </Button>
+                      <Tooltip title={stock > 0 ? "Add to cart" : "Out of stock"} arrow>
+                        <span style={{ width: "100%" }}>
+                          <IconButton
+                            onClick={() => handleAddToDish(food)}
+                            disabled={stock <= 0}
+                            sx={{
+                              width: "100%",
+                              height: 40,
+                              backgroundColor: stock > 0 ? "#c2410c" : "#94a3b8",
+                              color: "#ffffff",
+                              borderRadius: "12px",
+                              boxShadow: stock > 0 ? "0 2px 8px rgba(194,65,12,0.22)" : "none",
+                              "&:hover": {
+                                backgroundColor: stock > 0 ? "#9a3412" : "#94a3b8",
+                                boxShadow: stock > 0 ? "0 4px 12px rgba(194,65,12,0.32)" : "none",
+                              },
+                              "&.Mui-disabled": {
+                                backgroundColor: "#94a3b8",
+                                color: "#e2e8f0",
+                              },
+                            }}
+                          >
+                          <AddShoppingCartRoundedIcon sx={{ fontSize: 20 }} />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
                     ) : (
                       <Box
                         sx={{
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "space-between",
-                          height: 38,
+                          height: 40,
+                          backgroundColor: "#f0fdf4",
+                          border: "1px solid #bbf7d0",
+                          borderRadius: "12px",
                           px: 1,
                         }}
                       >
@@ -1962,12 +2233,12 @@ export default function Menu() {
                           sx={{
                             backgroundColor: "#22c55e",
                             color: "#ffffff",
-                            width: 32,
-                            height: 32,
+                            width: 28,
+                            height: 28,
                             "&:hover": { backgroundColor: "#16a34a" },
                           }}
                         >
-                          <RemoveRoundedIcon fontSize="small" />
+                          <RemoveRoundedIcon sx={{ fontSize: 16 }} />
                         </IconButton>
 
                         <Typography sx={{ fontWeight: 800, fontSize: "0.98rem", color: "#0f172a" }}>
@@ -1977,15 +2248,16 @@ export default function Menu() {
                         <IconButton
                           size="small"
                           onClick={() => handleUpdateQty(food._id, 1)}
+                          disabled={qtyInCart >= stock}
                           sx={{
                             backgroundColor: "#22c55e",
                             color: "#ffffff",
-                            width: 32,
-                            height: 32,
+                            width: 28,
+                            height: 28,
                             "&:hover": { backgroundColor: "#16a34a" },
                           }}
                         >
-                          <AddRoundedIcon fontSize="small" />
+                          <AddRoundedIcon sx={{ fontSize: 16 }} />
                         </IconButton>
                       </Box>
                     )
@@ -2003,20 +2275,69 @@ export default function Menu() {
       {/* RIGHT SECTION: TABLE & CART PANEL (Visible to Students Only) */}
       {/* ============================================================ */}
       {!isAdminOrStaff && (
-        <Box
-          sx={{
-            width: { xs: "100%", md: 400, lg: 430 },
-            backgroundColor: "#ffffff",
-            borderLeft: "1px solid #e2e8f0",
-            display: "flex",
-            flexDirection: "column",
-            height: "100%",
-            boxShadow: "-4px 0 24px rgba(0,0,0,0.02)",
-            flexShrink: 0,
-            p: { xs: 2, sm: 2.5 },
-            boxSizing: "border-box",
-          }}
-        >
+        <>
+          {/* Collapse / Expand toggle button — always visible */}
+          <Box
+            sx={{
+              position: "relative",
+              display: "flex",
+              alignItems: "stretch",
+              height: "100%",
+              flexShrink: 0,
+              width: cartCollapsed ? 28 : "auto",
+              transition: "width 0.3s cubic-bezier(0.4,0,0.2,1)",
+            }}
+          >
+            {/* Toggle tab — always pinned to left edge */}
+            <Tooltip title={cartCollapsed ? "Open Cart" : "Collapse Cart"} placement="left" arrow>
+              <Box
+                onClick={() => setCartCollapsed((p) => !p)}
+                sx={{
+                  position: "absolute",
+                  left: 0,
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  zIndex: 10,
+                  width: 28,
+                  height: 72,
+                  backgroundColor: "#ffffff",
+                  border: "1px solid #e2e8f0",
+                  borderRight: cartCollapsed ? "1px solid #e2e8f0" : "none",
+                  borderRadius: "12px 0 0 12px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  boxShadow: "-2px 0 10px rgba(0,0,0,0.06)",
+                  "&:hover": { backgroundColor: "#f1f5f9" },
+                }}
+              >
+                {cartCollapsed ? (
+                  <ChevronLeftRoundedIcon sx={{ fontSize: 20, color: "#475569" }} />
+                ) : (
+                  <ChevronRightRoundedIcon sx={{ fontSize: 20, color: "#475569" }} />
+                )}
+              </Box>
+            </Tooltip>
+
+            {/* Cart Panel — slides in/out */}
+            <Box
+              sx={{
+                width: cartCollapsed ? 0 : { xs: "100%", md: 400, lg: 430 },
+                overflow: "hidden",
+                transition: "width 0.3s cubic-bezier(0.4,0,0.2,1)",
+                backgroundColor: "#ffffff",
+                borderLeft: "1px solid #e2e8f0",
+                display: "flex",
+                flexDirection: "column",
+                height: "100%",
+                boxShadow: "-4px 0 24px rgba(0,0,0,0.02)",
+                flexShrink: 0,
+                boxSizing: "border-box",
+                ml: "28px",
+              }}
+            >
+            <Box sx={{ p: { xs: 2, sm: 2.5 }, display: "flex", flexDirection: "column", height: "100%", minWidth: { xs: "100%", md: 400, lg: 430 }, boxSizing: "border-box" }}>
           {/* Table Header & Switcher Icon */}
           <Box
             sx={{
@@ -2471,8 +2792,11 @@ export default function Menu() {
                 </Button>
               </Box>
             )}
+              </Box>
+            </Box>
+            </Box>
           </Box>
-        </Box>
+        </>
       )}
 
       {/* ============================================================ */}
@@ -2654,16 +2978,52 @@ export default function Menu() {
                 placeholder="e.g. Original Chess Meat Burger"
               />
 
-              <Stack direction="row" spacing={2}>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
                 <TextField
-                  label="Price (₹)"
+                  label="Original Price / MRP (₹)"
+                  type="number"
+                  fullWidth
+                  size="small"
+                  value={addForm.originalPrice}
+                  onChange={(e) => {
+                    const newOrig = e.target.value;
+                    const newOffer = calculateOfferPercent(newOrig, addForm.price);
+                    setAddForm({ ...addForm, originalPrice: newOrig, offer: newOffer });
+                  }}
+                  placeholder="e.g. 260"
+                />
+                <TextField
+                  label="Current / Selling Price (₹)"
                   type="number"
                   fullWidth
                   size="small"
                   required
                   value={addForm.price}
-                  onChange={(e) => setAddForm({ ...addForm, price: e.target.value })}
-                  placeholder="24.99"
+                  onChange={(e) => {
+                    const newPrice = e.target.value;
+                    const newOffer = calculateOfferPercent(addForm.originalPrice, newPrice);
+                    setAddForm({ ...addForm, price: newPrice, offer: newOffer });
+                  }}
+                  placeholder="e.g. 200"
+                />
+              </Stack>
+
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                <TextField
+                  label="Discount Offer (%) [Auto]"
+                  type="number"
+                  fullWidth
+                  size="small"
+                  value={addForm.offer}
+                  InputProps={{
+                    readOnly: true,
+                    endAdornment: addForm.offer > 0 ? (
+                      <InputAdornment position="end">
+                        <Chip label={`${addForm.offer}% OFF`} size="small" sx={{ bgcolor: "#fef08a", color: "#854d0e", fontWeight: 800 }} />
+                      </InputAdornment>
+                    ) : null,
+                  }}
+                  helperText={addForm.offer > 0 ? `Savings: ₹${Math.max(0, Number(addForm.originalPrice) - Number(addForm.price))}` : "Calculated from Original & Current price"}
                 />
                 <TextField
                   label="Category"
@@ -2690,17 +3050,6 @@ export default function Menu() {
                   value={addForm.stock}
                   onChange={(e) => setAddForm({ ...addForm, stock: e.target.value })}
                   placeholder="20"
-                />
-                <TextField
-                  label="Discount Offer (%)"
-                  type="number"
-                  fullWidth
-                  size="small"
-                  value={addForm.offer}
-                  onChange={(e) => setAddForm({ ...addForm, offer: e.target.value })}
-                  inputProps={{ min: 0, max: 100 }}
-                  placeholder="0"
-                  helperText="0 for no offer discount"
                 />
               </Stack>
 
@@ -2931,15 +3280,52 @@ export default function Menu() {
                 onChange={(e) => setEditForm({ ...editForm, itemname: e.target.value })}
               />
 
-              <Stack direction="row" spacing={2}>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
                 <TextField
-                  label="Price (₹)"
+                  label="Original Price / MRP (₹)"
+                  type="number"
+                  fullWidth
+                  size="small"
+                  value={editForm.originalPrice}
+                  onChange={(e) => {
+                    const newOrig = e.target.value;
+                    const newOffer = calculateOfferPercent(newOrig, editForm.price);
+                    setEditForm({ ...editForm, originalPrice: newOrig, offer: newOffer });
+                  }}
+                  placeholder="e.g. 260"
+                />
+                <TextField
+                  label="Current / Selling Price (₹)"
                   type="number"
                   fullWidth
                   size="small"
                   required
                   value={editForm.price}
-                  onChange={(e) => setEditForm({ ...editForm, price: e.target.value })}
+                  onChange={(e) => {
+                    const newPrice = e.target.value;
+                    const newOffer = calculateOfferPercent(editForm.originalPrice, newPrice);
+                    setEditForm({ ...editForm, price: newPrice, offer: newOffer });
+                  }}
+                  placeholder="e.g. 200"
+                />
+              </Stack>
+
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
+                <TextField
+                  label="Discount Offer (%) [Auto]"
+                  type="number"
+                  fullWidth
+                  size="small"
+                  value={editForm.offer}
+                  InputProps={{
+                    readOnly: true,
+                    endAdornment: editForm.offer > 0 ? (
+                      <InputAdornment position="end">
+                        <Chip label={`${editForm.offer}% OFF`} size="small" sx={{ bgcolor: "#fef08a", color: "#854d0e", fontWeight: 800 }} />
+                      </InputAdornment>
+                    ) : null,
+                  }}
+                  helperText={editForm.offer > 0 ? `Savings: ₹${Math.max(0, Number(editForm.originalPrice) - Number(editForm.price))}` : "Calculated from Original & Current price"}
                 />
                 <TextField
                   label="Category"
@@ -2965,16 +3351,6 @@ export default function Menu() {
                   size="small"
                   value={editForm.stock}
                   onChange={(e) => setEditForm({ ...editForm, stock: e.target.value })}
-                />
-                <TextField
-                  label="Discount Offer (%)"
-                  type="number"
-                  fullWidth
-                  size="small"
-                  value={editForm.offer}
-                  onChange={(e) => setEditForm({ ...editForm, offer: e.target.value })}
-                  inputProps={{ min: 0, max: 100 }}
-                  helperText="0 for no offer discount"
                 />
               </Stack>
 
@@ -3964,6 +4340,105 @@ export default function Menu() {
           </DialogActions>
         </Dialog>
       )}
+
+      {/* Student Food Rating Dialog */}
+      <Dialog
+        open={ratingDialogOpen}
+        onClose={() => setRatingDialogOpen(false)}
+        PaperProps={{
+          sx: {
+            borderRadius: "16px",
+            p: 1,
+            maxWidth: "380px",
+            width: "100%",
+          },
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 700, fontSize: "1.1rem", color: "#0f172a", pb: 0.5, textTransform: "capitalize" }}>
+          Rate {selectedFoodForRating?.itemname}
+        </DialogTitle>
+        <DialogContent sx={{ display: "flex", flexDirection: "column", alignItems: "center", py: 2 }}>
+          {selectedFoodForRating && (
+            <Box
+              component="img"
+              src={selectedFoodForRating.image || getFallbackImage(selectedFoodForRating.itemname)}
+              alt={selectedFoodForRating.itemname}
+              sx={{
+                width: 80,
+                height: 80,
+                borderRadius: "12px",
+                objectFit: "cover",
+                mb: 1.5,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+              }}
+            />
+          )}
+          <Typography sx={{ fontSize: "0.88rem", color: "#64748b", mb: 1, textAlign: "center" }}>
+            How would you rate this dish?
+          </Typography>
+          <Rating
+            name="student-food-rating"
+            value={userRatingScore}
+            precision={1}
+            size="large"
+            onChange={(event, newValue) => {
+              if (newValue !== null) setUserRatingScore(newValue);
+            }}
+            sx={{
+              fontSize: "2.3rem",
+              color: "#f59e0b",
+              mb: 1.5,
+            }}
+          />
+          <Typography sx={{ fontSize: "0.78rem", color: "#94a3b8" }}>
+            {(() => {
+              const f = selectedFoodForRating;
+              if (!f) return "No ratings yet";
+              let avg = 0;
+              let count = 0;
+              if (Array.isArray(f.ratings) && f.ratings.length > 0) {
+                avg = f.ratings.reduce((s, r) => s + (Number(r.rating) || 0), 0) / f.ratings.length;
+                count = f.ratings.length;
+              } else if (typeof f.averageRating === "number" && f.averageRating > 0 && typeof f.totalRatings === "number" && f.totalRatings > 0) {
+                avg = f.averageRating;
+                count = f.totalRatings;
+              }
+              return count > 0 && avg > 0
+                ? `Current Average: ${(Math.round(avg * 10) / 10).toFixed(1)} ★ (${count} reviews)`
+                : "No ratings yet";
+            })()}
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => setRatingDialogOpen(false)}
+            disabled={ratingSubmitting}
+            sx={{
+              textTransform: "none",
+              color: "#64748b",
+              fontWeight: 600,
+              borderRadius: "8px",
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleRatingSubmit}
+            disabled={ratingSubmitting}
+            sx={{
+              textTransform: "none",
+              fontWeight: 600,
+              borderRadius: "8px",
+              backgroundColor: "#2563eb",
+              "&:hover": { backgroundColor: "#1d4ed8" },
+              px: 2.5,
+            }}
+          >
+            {ratingSubmitting ? "Submitting..." : "Submit Rating"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
