@@ -3,33 +3,23 @@ import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { forgotPassword, resetPassword } from "../utils/api";
 import { useSnackbar } from "../hooks/useSnackbar";
 import { CartContext } from "../context/CartContext";
-
 import {
   Box,
-  TextField,
   Typography,
-  Button,
-  Paper,
-  InputAdornment,
-  Container,
   IconButton,
   CircularProgress,
 } from "@mui/material";
-import EmailIcon from "@mui/icons-material/Email";
-import LockIcon from "@mui/icons-material/Lock";
-import PinIcon from "@mui/icons-material/Pin";
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 
 export default function ForgotPassword() {
   const [searchParams] = useSearchParams();
-  const [step, setStep] = useState(1); // 1: Email, 2: OTP & New Password
-  const [email, setEmail] = useState("");
+  const [step, setStep] = useState(1); // 1: Identifier, 2: OTP & New Password
+  const [identifier, setIdentifier] = useState("");
+  const [resolvedEmail, setResolvedEmail] = useState("");
   const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
@@ -43,14 +33,14 @@ export default function ForgotPassword() {
     const otpParam = searchParams.get("otp");
 
     if (emailParam) {
-      setEmail(emailParam);
+      setIdentifier(emailParam);
+      setResolvedEmail(emailParam);
     }
     if (otpParam) {
       setOtp(otpParam);
     }
     if (emailParam && otpParam) {
       setStep(2);
-      enqueueSnackbar("Verification code verified from link. Enter your new password.", { variant: "info" });
     }
   }, [searchParams]);
 
@@ -64,18 +54,18 @@ export default function ForgotPassword() {
 
   const handleSendOtp = async (e) => {
     if (e) e.preventDefault();
-    if (!email.trim()) {
-      enqueueSnackbar("Please enter your registered email or username", { variant: "error" });
+    if (!identifier.trim()) {
+      enqueueSnackbar("Please enter your roll number or email", { variant: "error" });
       return;
     }
 
     setLoading(true);
     try {
-      const res = await forgotPassword(email.trim());
+      const res = await forgotPassword(identifier.trim());
       if (res?.success) {
         enqueueSnackbar(res.message || "Verification code sent to your email!", { variant: "success" });
         if (res.data?.email) {
-          setEmail(res.data.email);
+          setResolvedEmail(res.data.email);
         }
         setStep(2);
         setResendCooldown(60);
@@ -103,29 +93,28 @@ export default function ForgotPassword() {
       enqueueSnackbar("Password must be at least 6 characters long", { variant: "error" });
       return;
     }
-    if (newPassword !== confirmPassword) {
-      enqueueSnackbar("Passwords do not match", { variant: "error" });
-      return;
-    }
 
     setLoading(true);
     try {
-      const res = await resetPassword(email.trim(), otp.trim(), newPassword);
-      if (res?.success && res?.data?.user) {
-        const user = res.data.user;
-        login(user);
-        enqueueSnackbar("Password reset successfully! Logged in.", { variant: "success" });
-        const rollValue = String(user.role || "").toLowerCase();
-        if (rollValue === "admin" || rollValue === "staff") {
-          navigate("/admin/menu");
+      const res = await resetPassword(resolvedEmail || identifier.trim(), otp.trim(), newPassword);
+      if (res?.success) {
+        enqueueSnackbar("Password reset successfully! Logging you in...", { variant: "success" });
+        if (res.data?.user) {
+          login(res.data.user);
+          const role = String(res.data.user.role || "").toLowerCase();
+          if (role === "admin" || role === "staff") {
+            navigate("/admin/menu");
+          } else {
+            navigate("/student/menu");
+          }
         } else {
-          navigate("/student/menu");
+          navigate("/login");
         }
       } else {
-        enqueueSnackbar(res?.message || "Failed to reset password. Check your code.", { variant: "error" });
+        enqueueSnackbar(res?.message || "Password reset failed", { variant: "error" });
       }
     } catch (err) {
-      enqueueSnackbar("Failed to reset password. Please try again.", { variant: "error" });
+      enqueueSnackbar("Password reset failed. Please try again.", { variant: "error" });
     } finally {
       setLoading(false);
     }
@@ -135,254 +124,451 @@ export default function ForgotPassword() {
     <Box
       sx={{
         minHeight: "100vh",
-        background: "#f5f5f5",
+        background: "#0E0F11",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        py: { xs: 4, md: 0 },
+        p: { xs: 2, sm: 3 },
+        fontFamily: "'Plus Jakarta Sans', sans-serif",
       }}
     >
-      <Container maxWidth="xs">
-        <Paper
-          elevation={1}
+      {/* Split Card Container */}
+      <Box
+        sx={{
+          width: "100%",
+          maxWidth: "880px",
+          minHeight: "540px",
+          borderRadius: "22px",
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: { xs: "column", md: "row" },
+          boxShadow: "0 24px 70px rgba(0, 0, 0, 0.75)",
+          border: "1px solid rgba(255, 255, 255, 0.07)",
+        }}
+      >
+        {/* Left Warm Terracotta Panel */}
+        <Box
           sx={{
-            p: { xs: 3, sm: 5 },
-            borderRadius: 2,
-            background: "#ffffff",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+            width: { xs: "100%", md: "46%" },
+            background: "#381912",
+            p: { xs: 4, sm: 5 },
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "space-between",
+            position: "relative",
+          }}
+        >
+          {/* Top Section */}
+          <Box>
+            {/* Golden Circle Dot */}
+            <Box
+              sx={{
+                width: 44,
+                height: 44,
+                borderRadius: "50%",
+                background: "#F6B867",
+                mb: 4,
+                boxShadow: "0 4px 14px rgba(246, 184, 103, 0.35)",
+              }}
+            />
+
+            {/* Serif Title */}
+            <Typography
+              component="h1"
+              sx={{
+                fontFamily: "'Newsreader', 'Georgia', serif",
+                fontSize: { xs: "32px", sm: "38px" },
+                fontWeight: 700,
+                color: "#FFFFFF",
+                lineHeight: 1.15,
+                letterSpacing: "-0.01em",
+                mb: 2,
+              }}
+            >
+              Forgot your password?
+            </Typography>
+
+            {/* Subtitle */}
+            <Typography
+              sx={{
+                fontSize: "15px",
+                color: "#D89987",
+                lineHeight: 1.55,
+                fontWeight: 400,
+                maxWidth: "320px",
+              }}
+            >
+              Happens to everyone. We'll get you back to ordering in a minute.
+            </Typography>
+          </Box>
+
+          {/* Bottom Security Note */}
+          <Box
+            sx={{
+              mt: { xs: 5, md: 8 },
+              background: "rgba(255, 255, 255, 0.06)",
+              border: "1px solid rgba(255, 255, 255, 0.05)",
+              borderRadius: "12px",
+              p: { xs: 2, sm: 2.2 },
+              backdropFilter: "blur(6px)",
+            }}
+          >
+            <Typography
+              sx={{
+                color: "#F0D3CB",
+                fontSize: "14px",
+                fontWeight: 500,
+                lineHeight: 1.45,
+              }}
+            >
+              We'll send a 6-digit verification code to your registered email
+            </Typography>
+          </Box>
+        </Box>
+
+        {/* Right Dark Form Panel */}
+        <Box
+          sx={{
+            flex: 1,
+            background: "#161719",
+            p: { xs: 4, sm: 5 },
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
           }}
         >
           {/* Header */}
-          <Box sx={{ textAlign: "center", mb: 3 }}>
-            <Typography
-              variant="h5"
-              fontWeight={700}
-              sx={{
-                mb: 1,
-                color: "#1a1a1a",
-              }}
-            >
-              {step === 1 ? "Forgot Password" : "Reset Password"}
-            </Typography>
-            <Typography
-              variant="body2"
-              sx={{
-                color: "#666666",
-              }}
-            >
-              {step === 1
-                ? "Enter your registered email or username to receive a verification code"
-                : `Enter the verification code sent to ${email}`}
-            </Typography>
-          </Box>
+          <Typography
+            component="h2"
+            sx={{
+              fontFamily: "'Newsreader', 'Georgia', serif",
+              fontSize: { xs: "30px", sm: "34px" },
+              fontWeight: 700,
+              color: "#FFFFFF",
+              letterSpacing: "-0.01em",
+              lineHeight: 1.15,
+              mb: 1,
+            }}
+          >
+            Reset password
+          </Typography>
+          <Typography
+            sx={{
+              color: "#888C95",
+              fontSize: "14px",
+              mb: 3.5,
+              fontWeight: 400,
+            }}
+          >
+            {step === 1
+              ? "Enter your  email to get a verification code."
+              : `Enter the 6-digit code sent to ${resolvedEmail || "your email"}.`}
+          </Typography>
 
-          {/* STEP 1: Enter Email / Username */}
           {step === 1 ? (
-            <Box component="form" onSubmit={handleSendOtp}>
-              <TextField
-                label="Email or Username"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                fullWidth
-                variant="outlined"
-                size="small"
-                autoComplete="email"
-                placeholder="Enter email or username"
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <EmailIcon sx={{ color: "#999999", mr: 0.5, fontSize: 20 }} />
-                    </InputAdornment>
-                  ),
-                }}
-                sx={{
-                  mb: 3,
-                  "& .MuiOutlinedInput-root": {
-                    background: "#fafafa",
-                    borderRadius: 1,
-                    "& fieldset": { borderColor: "#e0e0e0" },
-                    "&:hover fieldset": { borderColor: "#cccccc" },
-                    "&.Mui-focused fieldset": { borderColor: "#1976d2" },
-                  },
-                }}
-              />
+            /* Step 1: Identifier Form */
+            <form onSubmit={handleSendOtp}>
+              <Box sx={{ mb: 3 }}>
+                <Typography
+                  component="label"
+                  htmlFor="forgot-identifier"
+                  sx={{
+                    display: "block",
+                    color: "#D0D2D7",
+                    fontSize: "13.5px",
+                    fontWeight: 500,
+                    mb: 1,
+                  }}
+                >
+                  Email
+                </Typography>
+                <input
+                  id="forgot-identifier"
+                  type="text"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  placeholder="DBIT2024CS041"
+                  required
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    background: "#1E2024",
+                    border: "1px solid #2B2E34",
+                    borderRadius: "10px",
+                    padding: "13px 16px",
+                    color: "#FFFFFF",
+                    fontSize: "15px",
+                    outline: "none",
+                    transition: "border-color 0.2s, box-shadow 0.2s",
+                    fontFamily: "inherit",
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = "#C84A2A";
+                    e.target.style.boxShadow = "0 0 0 2px rgba(200, 74, 42, 0.25)";
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = "#2B2E34";
+                    e.target.style.boxShadow = "none";
+                  }}
+                />
+              </Box>
 
-              <Button
+              {/* Send Code Button */}
+              <button
                 type="submit"
-                variant="contained"
-                fullWidth
                 disabled={loading}
-                sx={{
-                  py: 1.2,
-                  fontSize: "0.95rem",
+                style={{
+                  width: "100%",
+                  background: loading ? "#963B23" : "#C84A2A",
+                  color: "#FFFFFF",
+                  border: "none",
+                  borderRadius: "10px",
+                  padding: "14px 20px",
+                  fontSize: "15px",
                   fontWeight: 600,
-                  borderRadius: 1,
-                  textTransform: "none",
-                  background: "#1976d2",
-                  "&:hover": { background: "#1565c0" },
+                  cursor: loading ? "not-allowed" : "pointer",
+                  transition: "background 0.2s, transform 0.1s",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  fontFamily: "inherit",
+                  marginBottom: "24px",
+                }}
+                onMouseEnter={(e) => {
+                  if (!loading) e.currentTarget.style.background = "#B83E1F";
+                }}
+                onMouseLeave={(e) => {
+                  if (!loading) e.currentTarget.style.background = "#C84A2A";
                 }}
               >
-                {loading ? <CircularProgress size={24} sx={{ color: "white" }} /> : "Send Verification Code"}
-              </Button>
-            </Box>
+                {loading ? <CircularProgress size={20} sx={{ color: "#FFFFFF" }} /> : "Send verification code"}
+              </button>
+
+              {/* Back to sign in */}
+              <Box sx={{ textAlign: "center" }}>
+                <Link
+                  to="/login"
+                  style={{
+                    color: "#5B8DF6",
+                    fontSize: "14px",
+                    fontWeight: 500,
+                    textDecoration: "none",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                  onMouseEnter={(e) => (e.target.style.textDecoration = "underline")}
+                  onMouseLeave={(e) => (e.target.style.textDecoration = "none")}
+                >
+                  <ArrowBackIcon sx={{ fontSize: 16 }} /> Back to sign in
+                </Link>
+              </Box>
+            </form>
           ) : (
-            /* STEP 2: Enter OTP and New Password */
-            <Box component="form" onSubmit={handleResetPassword}>
-              <TextField
-                label="6-Digit Verification Code"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value)}
-                fullWidth
-                variant="outlined"
-                size="small"
-                placeholder="e.g. 123456"
-                inputProps={{ maxLength: 6 }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <PinIcon sx={{ color: "#999999", mr: 0.5, fontSize: 20 }} />
-                    </InputAdornment>
-                  ),
-                }}
-                sx={{
-                  mb: 2,
-                  "& .MuiOutlinedInput-root": {
-                    background: "#fafafa",
-                    borderRadius: 1,
-                    "& fieldset": { borderColor: "#e0e0e0" },
-                    "&:hover fieldset": { borderColor: "#cccccc" },
-                    "&.Mui-focused fieldset": { borderColor: "#1976d2" },
-                  },
-                }}
-              />
+            /* Step 2: Verification Code & New Password */
+            <form onSubmit={handleResetPassword}>
+              <Box sx={{ mb: 2 }}>
+                <Typography
+                  component="label"
+                  htmlFor="forgot-otp"
+                  sx={{
+                    display: "block",
+                    color: "#D0D2D7",
+                    fontSize: "13.5px",
+                    fontWeight: 500,
+                    mb: 0.8,
+                  }}
+                >
+                  Verification code
+                </Typography>
+                <input
+                  id="forgot-otp"
+                  type="text"
+                  maxLength={6}
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
+                  placeholder="123456"
+                  required
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    background: "#1E2024",
+                    border: "1px solid #2B2E34",
+                    borderRadius: "10px",
+                    padding: "13px 16px",
+                    color: "#FFFFFF",
+                    fontSize: "18px",
+                    letterSpacing: "4px",
+                    fontWeight: 600,
+                    outline: "none",
+                    transition: "border-color 0.2s, box-shadow 0.2s",
+                    fontFamily: "inherit",
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = "#C84A2A";
+                    e.target.style.boxShadow = "0 0 0 2px rgba(200, 74, 42, 0.25)";
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = "#2B2E34";
+                    e.target.style.boxShadow = "none";
+                  }}
+                />
+              </Box>
 
-              <TextField
-                label="New Password"
-                type={showPassword ? "text" : "password"}
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                fullWidth
-                variant="outlined"
-                size="small"
-                autoComplete="new-password"
-                placeholder="Minimum 6 characters"
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <LockIcon sx={{ color: "#999999", mr: 0.5, fontSize: 20 }} />
-                    </InputAdornment>
-                  ),
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        onClick={() => setShowPassword(!showPassword)}
-                        edge="end"
-                        size="small"
-                        sx={{ color: "#999999" }}
-                      >
-                        {showPassword ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                }}
-                sx={{
-                  mb: 2,
-                  "& .MuiOutlinedInput-root": {
-                    background: "#fafafa",
-                    borderRadius: 1,
-                    "& fieldset": { borderColor: "#e0e0e0" },
-                    "&:hover fieldset": { borderColor: "#cccccc" },
-                    "&.Mui-focused fieldset": { borderColor: "#1976d2" },
-                  },
-                }}
-              />
+              <Box sx={{ mb: 3 }}>
+                <Typography
+                  component="label"
+                  htmlFor="forgot-newpass"
+                  sx={{
+                    display: "block",
+                    color: "#D0D2D7",
+                    fontSize: "13.5px",
+                    fontWeight: 500,
+                    mb: 0.8,
+                  }}
+                >
+                  New password
+                </Typography>
+                <Box sx={{ position: "relative" }}>
+                  <input
+                    id="forgot-newpass"
+                    type={showPassword ? "text" : "password"}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Create a new password"
+                    required
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      background: "#1E2024",
+                      border: "1px solid #2B2E34",
+                      borderRadius: "10px",
+                      padding: "13px 44px 13px 16px",
+                      color: "#FFFFFF",
+                      fontSize: "15px",
+                      outline: "none",
+                      transition: "border-color 0.2s, box-shadow 0.2s",
+                      fontFamily: "inherit",
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = "#C84A2A";
+                      e.target.style.boxShadow = "0 0 0 2px rgba(200, 74, 42, 0.25)";
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = "#2B2E34";
+                      e.target.style.boxShadow = "none";
+                    }}
+                  />
+                  <IconButton
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    tabIndex={-1}
+                    sx={{
+                      position: "absolute",
+                      right: 8,
+                      top: "50%",
+                      transform: "translateY(-50%)",
+                      color: "#727680",
+                      "&:hover": { color: "#D0D2D7" },
+                    }}
+                    size="small"
+                  >
+                    {showPassword ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                  </IconButton>
+                </Box>
+              </Box>
 
-              <TextField
-                label="Confirm New Password"
-                type={showPassword ? "text" : "password"}
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                fullWidth
-                variant="outlined"
-                size="small"
-                autoComplete="new-password"
-                placeholder="Re-enter new password"
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <LockIcon sx={{ color: "#999999", mr: 0.5, fontSize: 20 }} />
-                    </InputAdornment>
-                  ),
-                }}
-                sx={{
-                  mb: 2.5,
-                  "& .MuiOutlinedInput-root": {
-                    background: "#fafafa",
-                    borderRadius: 1,
-                    "& fieldset": { borderColor: "#e0e0e0" },
-                    "&:hover fieldset": { borderColor: "#cccccc" },
-                    "&.Mui-focused fieldset": { borderColor: "#1976d2" },
-                  },
-                }}
-              />
-
-              <Button
+              {/* Reset Password Button */}
+              <button
                 type="submit"
-                variant="contained"
-                fullWidth
                 disabled={loading}
-                sx={{
-                  py: 1.2,
-                  fontSize: "0.95rem",
+                style={{
+                  width: "100%",
+                  background: loading ? "#963B23" : "#C84A2A",
+                  color: "#FFFFFF",
+                  border: "none",
+                  borderRadius: "10px",
+                  padding: "14px 20px",
+                  fontSize: "15px",
                   fontWeight: 600,
-                  borderRadius: 1,
-                  textTransform: "none",
-                  background: "#1976d2",
-                  "&:hover": { background: "#1565c0" },
+                  cursor: loading ? "not-allowed" : "pointer",
+                  transition: "background 0.2s, transform 0.1s",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                  fontFamily: "inherit",
+                  marginBottom: "16px",
+                }}
+                onMouseEnter={(e) => {
+                  if (!loading) e.currentTarget.style.background = "#B83E1F";
+                }}
+                onMouseLeave={(e) => {
+                  if (!loading) e.currentTarget.style.background = "#C84A2A";
                 }}
               >
-                {loading ? <CircularProgress size={24} sx={{ color: "white" }} /> : "Reset Password"}
-              </Button>
+                {loading ? <CircularProgress size={20} sx={{ color: "#FFFFFF" }} /> : "Reset password & sign in"}
+              </button>
 
               <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", mt: 2 }}>
-                <Button
-                  size="small"
+                <button
+                  type="button"
                   onClick={() => setStep(1)}
-                  sx={{ textTransform: "none", color: "#666" }}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "#888C95",
+                    fontSize: "13.5px",
+                    cursor: "pointer",
+                    padding: 0,
+                    fontFamily: "inherit",
+                  }}
                 >
-                  Change Email
-                </Button>
-                <Button
-                  size="small"
-                  disabled={resendCooldown > 0 || loading}
-                  onClick={() => handleSendOtp()}
-                  sx={{ textTransform: "none", color: "#1976d2", fontWeight: 600 }}
-                >
-                  {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend Code"}
-                </Button>
-              </Box>
-            </Box>
-          )}
+                  ← Change email/roll no
+                </button>
 
-          {/* Back to Login Link */}
-          <Box sx={{ textAlign: "center", mt: 3, pt: 2, borderTop: "1px solid #f0f0f0" }}>
-            <Link
-              to="/login"
-              style={{
-                textDecoration: "none",
-                color: "#1976d2",
-                fontWeight: 600,
-                fontSize: "0.9rem",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-              }}
-            >
-              <ArrowBackIcon fontSize="small" /> Back to Sign In
-            </Link>
-          </Box>
-        </Paper>
-      </Container>
+                <button
+                  type="button"
+                  disabled={resendCooldown > 0}
+                  onClick={handleSendOtp}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: resendCooldown > 0 ? "#555860" : "#5B8DF6",
+                    fontSize: "13.5px",
+                    fontWeight: 500,
+                    cursor: resendCooldown > 0 ? "default" : "pointer",
+                    padding: 0,
+                    fontFamily: "inherit",
+                  }}
+                >
+                  {resendCooldown > 0 ? `Resend code (${resendCooldown}s)` : "Resend code"}
+                </button>
+              </Box>
+
+              <Box sx={{ textAlign: "center", mt: 3 }}>
+                <Link
+                  to="/login"
+                  style={{
+                    color: "#5B8DF6",
+                    fontSize: "14px",
+                    fontWeight: 500,
+                    textDecoration: "none",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                  onMouseEnter={(e) => (e.target.style.textDecoration = "underline")}
+                  onMouseLeave={(e) => (e.target.style.textDecoration = "none")}
+                >
+                  <ArrowBackIcon sx={{ fontSize: 16 }} /> Back to sign in
+                </Link>
+              </Box>
+            </form>
+          )}
+        </Box>
+      </Box>
     </Box>
   );
 }

@@ -24,7 +24,7 @@ function HeaderSelector(){
   const { user } = useContext(CartContext);
   
   // hide headers on login, register, and forgot-password routes
-  if(location.pathname === '/login' || location.pathname === '/' || location.pathname === '/forgot-password') return null;
+  if (['/login', '/', '/register', '/forgot-password'].includes(location.pathname)) return null;
   
   // If no user, don't show header (ProtectedRoute will handle redirect)
   if (!user || !user.role) return null;
@@ -50,7 +50,7 @@ function AppContent() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useContext(CartContext);
-  const isAuthPage = ['/login', '/', '/forgot-password'].includes(location.pathname);
+  const isAuthPage = ['/login', '/', '/register', '/forgot-password'].includes(location.pathname);
   const showSidebar = Boolean(user && user.role) && !isAuthPage;
   
   const drawerOpen = useDrawerState();
@@ -80,6 +80,7 @@ function AppContent() {
             <Route path="/cart" element={<Navigate to="/student/menu" replace />} />
             <Route path="/login" element={<Login />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/register" element={<Register />} />
             <Route path="/" element={<Register />} />
             <Route path="/student/orders" element={<ProtectedRoute requiredRole="student"><Orders /></ProtectedRoute>} />
             <Route path="/admin/orders" element={<ProtectedRoute allowedRoles={["admin", "staff"]}><Orders /></ProtectedRoute>} />

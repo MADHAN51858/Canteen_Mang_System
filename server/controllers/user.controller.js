@@ -835,23 +835,23 @@ const withdrawAmount = asyncHandler(async (req, res) => {
 });
 
 const forgotPassword = asyncHandler(async (req, res) => {
-  const { email, username } = req.body;
-  const normalizedEmail = typeof email === "string" ? email.toLowerCase().trim() : undefined;
-  const normalizedUsername = typeof username === "string" ? username.toLowerCase().trim() : undefined;
+  const { email, username, rollNo } = req.body;
+  const input = (rollNo || email || username || "").toLowerCase().trim();
 
-  if (!normalizedEmail && !normalizedUsername) {
-    throw new ApiError(400, "Email or Username is required");
+  if (!input) {
+    throw new ApiError(400, "Roll number or email is required");
   }
 
   const user = await User.findOne({
     $or: [
-      ...(normalizedEmail ? [{ email: normalizedEmail }] : []),
-      ...(normalizedUsername ? [{ username: normalizedUsername }] : []),
+      { email: input },
+      { username: input },
+      { rollNo: input },
     ],
   });
 
   if (!user) {
-    throw new ApiError(404, "User not found with this email or username");
+    throw new ApiError(404, "User not found with this roll number or email");
   }
 
   if (!user.email) {
@@ -878,11 +878,11 @@ const forgotPassword = asyncHandler(async (req, res) => {
 });
 
 const resetPassword = asyncHandler(async (req, res) => {
-  const { email, otp, newPassword } = req.body;
-  const normalizedEmail = typeof email === "string" ? email.toLowerCase().trim() : undefined;
+  const { email, otp, newPassword, rollNo } = req.body;
+  const input = (rollNo || email || "").toLowerCase().trim();
 
-  if (!normalizedEmail || !otp || !newPassword) {
-    throw new ApiError(400, "Email, OTP, and new password are required");
+  if (!input || !otp || !newPassword) {
+    throw new ApiError(400, "Roll number or email, OTP, and new password are required");
   }
 
   if (String(newPassword).length < 6) {
@@ -890,7 +890,7 @@ const resetPassword = asyncHandler(async (req, res) => {
   }
 
   const user = await User.findOne({
-    $or: [{ email: normalizedEmail }, { username: normalizedEmail }],
+    $or: [{ email: input }, { username: input }, { rollNo: input }],
   });
 
   if (!user) {
