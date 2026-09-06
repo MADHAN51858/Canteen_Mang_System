@@ -5,14 +5,27 @@ import { Order } from "../models/order.model.js";
 import { User } from "../models/user.model.js";
 import { Food } from "../models/food.model.js";
 
-// Replaces previous Jimp implementation. Uses only canvas + JsBarcode.
 import fs from "fs";
 import os from "os";
 import path from "path";
-import { createCanvas, loadImage } from "canvas";
 import JsBarcode from "jsbarcode";
 import QRCode from "qrcode";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
+
+// Helper to safely load canvas in environments with native binary support
+let canvasModule = null;
+const getCanvas = async () => {
+  if (canvasModule !== null) return canvasModule;
+  try {
+    const mod = await import("canvas");
+    canvasModule = mod.default || mod;
+    return canvasModule;
+  } catch (err) {
+    console.warn("Canvas module not available in this environment, falling back to QR code only:", err.message);
+    canvasModule = false;
+    return false;
+  }
+};
 
 
 /**
@@ -61,6 +74,21 @@ const Qrcode = async (res, order, items) => {
 
     // Optionally keep order.totalprice in sync (uncomment if desired)
     // order.totalprice = computedTotal;
+
+    // Check canvas availability
+    const canvasLib = await getCanvas();
+    if (!canvasLib) {
+      // Fallback: Generate QR code containing orderNumber when canvas is unavailable (e.g., serverless)
+      const qrBuffer = await QRCode.toBuffer(String(order.orderNumber), {
+        errorCorrectionLevel: "H",
+        width: 360,
+      });
+      order.qrcode = `data:image/png;base64,${qrBuffer.toString("base64")}`;
+      await order.save();
+      return true;
+    }
+
+    const { createCanvas, loadImage } = canvasLib;
 
     // 3) Generate barcode buffer using jsbarcode + canvas
     const barcodeWidth = 520;

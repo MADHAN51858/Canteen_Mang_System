@@ -9,8 +9,9 @@ const connectDB = async () => {
   try {
     const rawUrl = process.env.MONGODB_URL || "";
     if (!rawUrl) {
-      console.warn("MONGODB_URL is not defined in environment variables");
-      return;
+      const msg = "MONGODB_URL is not defined in environment variables. Please configure it in Vercel Project Settings.";
+      console.error(msg);
+      throw new Error(msg);
     }
 
     let connectionString;
@@ -27,10 +28,11 @@ const connectDB = async () => {
     console.log(`MongoDB Connected: ${connectionInstance.connection.host}`);
     return connectionInstance;
   } catch (error) {
-    console.log("MongoDb Connection Error", error.message);
+    console.error("MongoDB Connection Error:", error.message);
     if (!process.env.VERCEL) {
       process.exit(1);
     }
+    throw error;
   }
 };
 

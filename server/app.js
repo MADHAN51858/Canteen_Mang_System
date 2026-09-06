@@ -29,6 +29,27 @@ app.use(express.urlencoded({ extended: true, limit: "16kb" }))
 app.use(express.static("public"))
 app.use(cookieParser())
 
+// Database connection middleware for serverless/cold-start environments
+import connectDB from "./db/index.js";
+let dbPromise = null;
+app.use(async (req, res, next) => {
+  try {
+    if (!dbPromise) {
+      dbPromise = connectDB();
+    }
+    await dbPromise;
+    next();
+  } catch (err) {
+    dbPromise = null; // reset to allow retry on subsequent requests
+    console.error("Database connection error in middleware:", err);
+    return res.status(500).json({
+      statusCode: 500,
+      success: false,
+      message: err.message || "Database connection failed",
+    });
+  }
+});
+
 // Dummy payment endpoint for cart
 app.post("/create-order", async (req, res) => {
   const { amount } = req.body;
