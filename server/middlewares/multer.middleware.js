@@ -1,16 +1,25 @@
 import multer from "multer";
 import fs from "fs";
 import path from "path";
+import os from "os";
 
-const tempDir = "./public/temp";
-if (!fs.existsSync(tempDir)) {
-    fs.mkdirSync(tempDir, { recursive: true });
+const tempDir = path.join(os.tmpdir(), "canteen-temp");
+try {
+    if (!fs.existsSync(tempDir)) {
+        fs.mkdirSync(tempDir, { recursive: true });
+    }
+} catch (e) {
+    // Silently ignore if creation fails on cold start
 }
 
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
-        if (!fs.existsSync(tempDir)) {
-            fs.mkdirSync(tempDir, { recursive: true });
+        try {
+            if (!fs.existsSync(tempDir)) {
+                fs.mkdirSync(tempDir, { recursive: true });
+            }
+        } catch (e) {
+            // fallback
         }
         cb(null, tempDir);
     },
