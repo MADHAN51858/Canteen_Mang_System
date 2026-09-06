@@ -10,8 +10,8 @@ const app = express()
 app.use(cors({
   origin: [
     process.env.CORS_ORIGIN,
-    "https://canteen-mang-system-1.onrender.com",
-    "http://localhost:5173",
+   "http://localhost:5173",
+    "https://canteen-mang-system.vercel.app",
     "http://localhost:3000"
   ].filter(Boolean),
   methods: ["GET", "POST", "PUT", "DELETE"],
