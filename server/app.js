@@ -8,12 +8,17 @@ dotenv.config();
 const app = express()
 
 app.use(cors({
-  origin: [
-    process.env.CORS_ORIGIN,
-   "http://localhost:5173",
-    "https://canteen-mang-system.vercel.app",
-    "http://localhost:3000"
-  ].filter(Boolean),
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (
+      origin.includes("localhost") ||
+      origin.includes(".vercel.app") ||
+      origin === process.env.CORS_ORIGIN
+    ) {
+      return callback(null, true);
+    }
+    return callback(null, true);
+  },
   methods: ["GET", "POST", "PUT", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true

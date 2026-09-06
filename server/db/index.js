@@ -1,10 +1,18 @@
 import mongoose from "mongoose";
-
 import { DB_NAME } from "../constants.js";
 
 const connectDB = async () => {
+  if (mongoose.connection.readyState >= 1) {
+    return mongoose.connection;
+  }
+
   try {
     const rawUrl = process.env.MONGODB_URL || "";
+    if (!rawUrl) {
+      console.warn("MONGODB_URL is not defined in environment variables");
+      return;
+    }
+
     let connectionString;
     if (rawUrl.includes("?")) {
       const [base, query] = rawUrl.split("?");
@@ -16,12 +24,13 @@ const connectDB = async () => {
     }
 
     const connectionInstance = await mongoose.connect(connectionString);
-
-    console.log(`MongoDB Connected: 
-            ${connectionInstance.connection.host}`);
-  } catch (error){
+    console.log(`MongoDB Connected: ${connectionInstance.connection.host}`);
+    return connectionInstance;
+  } catch (error) {
     console.log("MongoDb Connection Error", error.message);
-    process.exit(1);
+    if (!process.env.VERCEL) {
+      process.exit(1);
+    }
   }
 };
 
