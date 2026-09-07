@@ -1163,10 +1163,27 @@ export default function Menu() {
           clearCart();
           enqueueSnackbar("Order placed successfully!", { variant: "success" });
         } else {
+          // If wallet was deducted, refund it!
+          if (paymentMethod === "wallet") {
+            try {
+              const refundRes = await post("/users/addMoney", { amount: totalAmount });
+              if (refundRes?.data?.newBalance !== undefined) {
+                login({ ...user, walletBalance: refundRes.data.newBalance });
+              }
+            } catch (re) {}
+          }
           enqueueSnackbar(res?.message || "Failed to place order. Please try again.", { variant: "error" });
         }
       }
     } catch (err) {
+      if (paymentMethod === "wallet") {
+        try {
+          const refundRes = await post("/users/addMoney", { amount: totalAmount });
+          if (refundRes?.data?.newBalance !== undefined) {
+            login({ ...user, walletBalance: refundRes.data.newBalance });
+          }
+        } catch (re) {}
+      }
       enqueueSnackbar(err?.message || "Failed to place order. Please try again.", { variant: "error" });
     } finally {
       setOrderSubmitting(false);

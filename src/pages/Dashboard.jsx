@@ -1256,8 +1256,8 @@ export default function Dashboard() {
               }}
             >
               {loading ? (
-                Array.from({ length: 7 }).map((_, i) => (
-                  <Box key={i} sx={{ py: 0.8, display: "flex", alignItems: "center", gap: 1.2 }}>
+                Array.from({ length: 11 }).map((_, i) => (
+                  <Box key={i} sx={{ py: 1.5, display: "flex", alignItems: "center", gap: 1.2 }}>
                     <Skeleton variant="circular" width={32} height={32} />
                     <Box sx={{ flex: 1 }}>
                       <Skeleton width="40%" height={15} />
@@ -1278,8 +1278,8 @@ export default function Dashboard() {
                     sx={{
                       display: "flex",
                       alignItems: "center",
-                      gap: 1.1,
-                      py: 0.8,
+                      gap: 1.5,
+                      py: 1.5,
                       borderBottom: idx !== recentOrdersList.length - 1 ? "1px solid #F1F5F9" : "none",
                       width: "100%",
                       minWidth: 0,

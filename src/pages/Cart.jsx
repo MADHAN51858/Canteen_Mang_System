@@ -109,9 +109,12 @@ export default function Cart() {
   async function confirmPayment() {
     setPaymentDialogOpen(false);
     setLoading(true);
-    const userOrder = cart.flatMap((i) => 
-      Array((i.quantity || 1)).fill(i.itemname)
-    );
+    const userOrder = cart.map((i) => ({
+      _id: i._id,
+      itemname: i.itemname,
+      price: i.price,
+      quantity: i.quantity || 1,
+    }));
 
     try {
       if (paymentMethod === "wallet") {
@@ -143,6 +146,13 @@ export default function Cart() {
         // Place order
         const orderRes = await placeOrder(userOrder, isPre);
         if (!orderRes || orderRes.success === false) {
+          // Refund wallet on order placement failure
+          try {
+            const refundRes = await post("/users/addMoney", { amount: total });
+            if (refundRes?.data?.newBalance !== undefined) {
+              login({ ...user, walletBalance: refundRes.data.newBalance });
+            }
+          } catch (re) {}
           const errMsg = orderRes?.message || "Failed to place order";
           setMsg(errMsg);
           enqueueSnackbar(errMsg, { variant: "error" });
@@ -170,6 +180,14 @@ export default function Cart() {
         enqueueSnackbar(successMsg, { variant: "success" });
       }
     } catch (err) {
+      if (paymentMethod === "wallet") {
+        try {
+          const refundRes = await post("/users/addMoney", { amount: total });
+          if (refundRes?.data?.newBalance !== undefined) {
+            login({ ...user, walletBalance: refundRes.data.newBalance });
+          }
+        } catch (re) {}
+      }
       const errMsg = err?.message || "Failed to place order";
       setMsg(errMsg);
       enqueueSnackbar(errMsg, { variant: "error" });

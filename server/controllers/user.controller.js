@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.model.js";
@@ -409,37 +410,99 @@ const orderFood = asyncHandler(async (req, res) => {
     throw new ApiError(404, "User not found");
   }
 
-  const orderNumber = `ORD-${Date.now()}`;
+  // Aggregate requested quantities by ID or itemname
+  // userOrder can contain objects ({ _id, foodId, itemname, quantity }) or strings (itemnames or IDs)
+  const countsById = {};
+  const countsByName = {};
 
-  // Count requested quantities by itemname
-  const counts = {};
-  for (const n of userOrder) {
-    const key = String(n || "").toLowerCase();
-    if (!key) continue;
-    counts[key] = (counts[key] || 0) + 1;
+  for (const item of userOrder) {
+    if (!item) continue;
+
+    if (typeof item === "object") {
+      const id = item._id || item.foodId || item.id;
+      const name = item.itemname || item.name;
+      const qty = Math.max(1, parseInt(item.quantity || item.qty, 10) || 1);
+
+      if (id && mongoose.Types.ObjectId.isValid(String(id))) {
+        const idStr = String(id);
+        countsById[idStr] = (countsById[idStr] || 0) + qty;
+      } else if (name) {
+        const nameKey = String(name).trim().toLowerCase();
+        countsByName[nameKey] = (countsByName[nameKey] || 0) + qty;
+      }
+    } else if (typeof item === "string") {
+      const trimmed = item.trim();
+      if (!trimmed) continue;
+      if (mongoose.Types.ObjectId.isValid(trimmed) && trimmed.length === 24) {
+        countsById[trimmed] = (countsById[trimmed] || 0) + 1;
+      } else {
+        const nameKey = trimmed.toLowerCase();
+        countsByName[nameKey] = (countsByName[nameKey] || 0) + 1;
+      }
+    }
   }
-  const names = Object.keys(counts);
-  if (names.length === 0) throw new ApiError(400, "No valid items found in order");
 
-  // Load foods and validate stock
-  const foods = await Food.find({ itemname: { $in: names } });
-  if (foods.length !== names.length) {
-    const found = new Set(foods.map(f => f.itemname));
-    const missing = names.filter(n => !found.has(n));
+  const requestedIds = Object.keys(countsById);
+  const requestedNames = Object.keys(countsByName);
+
+  if (requestedIds.length === 0 && requestedNames.length === 0) {
+    throw new ApiError(400, "No valid items found in order");
+  }
+
+  // Build query conditions
+  const queryConditions = [];
+  if (requestedIds.length > 0) {
+    queryConditions.push({ _id: { $in: requestedIds } });
+  }
+  if (requestedNames.length > 0) {
+    const nameRegexes = requestedNames.map(
+      (n) => new RegExp(`^${n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i")
+    );
+    queryConditions.push({ itemname: { $in: nameRegexes } });
+  }
+
+  const foods = await Food.find(
+    queryConditions.length === 1 ? queryConditions[0] : { $or: queryConditions }
+  );
+
+  const getFoodRequestedQty = (food) => {
+    const fromId = countsById[String(food._id)] || 0;
+    const foodNameLower = String(food.itemname || "").trim().toLowerCase();
+    const fromName = countsByName[foodNameLower] || 0;
+    return fromId + fromName;
+  };
+
+  // Check if any requested item is missing
+  const foundIds = new Set(foods.map((f) => String(f._id)));
+  const foundNames = new Set(foods.map((f) => String(f.itemname || "").trim().toLowerCase()));
+
+  const missing = [];
+  for (const id of requestedIds) {
+    if (!foundIds.has(id)) missing.push(`ID: ${id}`);
+  }
+  for (const name of requestedNames) {
+    if (!foundNames.has(name)) missing.push(name);
+  }
+
+  if (missing.length > 0) {
     throw new ApiError(400, `Items not found: ${missing.join(", ")}`);
   }
 
+  // Validate stock
   for (const f of foods) {
-    const need = counts[f.itemname] || 0;
+    const need = getFoodRequestedQty(f);
     if (typeof f.stock !== "number" || f.stock < need) {
-      throw new ApiError(400, `Insufficient stock for ${f.itemname}. Available: ${f.stock ?? 0}, requested: ${need}`);
+      throw new ApiError(
+        400,
+        `Insufficient stock for ${f.itemname}. Available: ${f.stock ?? 0}, requested: ${need}`
+      );
     }
   }
 
   // Decrement stock atomically per item
   await Promise.all(
-    foods.map(f => {
-      const need = counts[f.itemname] || 0;
+    foods.map((f) => {
+      const need = getFoodRequestedQty(f);
       const newStock = (f.stock || 0) - need;
       return Food.updateOne(
         { _id: f._id, stock: { $gte: need } },
@@ -452,20 +515,20 @@ const orderFood = asyncHandler(async (req, res) => {
   const allItemIds = [];
   const expandedItems = [];
   for (const f of foods) {
-    const need = counts[f.itemname] || 0;
+    const need = getFoodRequestedQty(f);
     for (let i = 0; i < need; i++) {
       allItemIds.push(f._id);
       expandedItems.push(f);
     }
   }
 
+  // Generate unique order number (lowercase format consistent with table orders)
+  const orderNumber = "ord-" + Math.random().toString(36).substr(2, 9);
   user.orders.push({ orderNumber, items: allItemIds });
+  await user.save();
 
-  const response = await createOrder(res, user.username, orderNumber, expandedItems, pre);
-
-  if (response) {
-    await user.save();
-  }
+  // Create order receipt & QR code, then return response
+  await createOrder(res, user.username, orderNumber, expandedItems, Boolean(pre));
 });
 
 const getUserId = asyncHandler(async (req, res) => {
