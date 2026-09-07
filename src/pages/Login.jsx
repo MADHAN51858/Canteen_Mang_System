@@ -103,17 +103,7 @@ export default function Login() {
         >
           {/* Top Section */}
           <Box>
-            {/* Golden Circle Dot */}
-            <Box
-              sx={{
-                width: 44,
-                height: 44,
-                borderRadius: "50%",
-                background: "#F6B867",
-                mb: 4,
-                boxShadow: "0 4px 14px rgba(246, 184, 103, 0.35)",
-              }}
-            />
+         
 
             {/* Serif Title */}
             <Typography

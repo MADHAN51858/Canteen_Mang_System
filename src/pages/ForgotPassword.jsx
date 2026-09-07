@@ -12,16 +12,22 @@ import {
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import VisibilityOffIcon from "@mui/icons-material/VisibilityOff";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import MailOutlineIcon from "@mui/icons-material/MailOutline";
+import PhoneIphoneIcon from "@mui/icons-material/PhoneIphone";
 
 export default function ForgotPassword() {
   const [searchParams] = useSearchParams();
-  const [step, setStep] = useState(1); // 1: Email, 2: OTP & New Password
+  const [step, setStep] = useState(1); // 1: Target Input, 2: OTP & New Password
+  const [method, setMethod] = useState("email"); // "email" | "phone"
   const [email, setEmail] = useState("");
+  const [phoneNo, setPhoneNo] = useState("");
+  const [maskedTarget, setMaskedTarget] = useState("");
   const [otp, setOtp] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const navigate = useNavigate();
   const { login } = useContext(CartContext);
@@ -29,15 +35,21 @@ export default function ForgotPassword() {
 
   useEffect(() => {
     const emailParam = searchParams.get("email");
+    const phoneParam = searchParams.get("phone") || searchParams.get("phoneNo");
     const otpParam = searchParams.get("otp");
 
     if (emailParam) {
       setEmail(emailParam);
+      setMethod("email");
+    } else if (phoneParam) {
+      setPhoneNo(phoneParam);
+      setMethod("phone");
     }
+
     if (otpParam) {
       setOtp(otpParam);
     }
-    if (emailParam && otpParam) {
+    if ((emailParam || phoneParam) && otpParam) {
       setStep(2);
     }
   }, [searchParams]);
@@ -52,33 +64,100 @@ export default function ForgotPassword() {
 
   const handleSendOtp = async (e) => {
     if (e) e.preventDefault();
-    if (!email.trim()) {
-      enqueueSnackbar("Please enter your registered email", { variant: "error" });
-      return;
-    }
+    setErrorMessage("");
 
-    setLoading(true);
-    try {
-      const res = await forgotPassword(email.trim());
-      if (res?.success) {
-        enqueueSnackbar(res.message || "Verification code sent to your email!", { variant: "success" });
-        if (res.data?.email) {
-          setEmail(res.data.email);
-        }
-        setStep(2);
-        setResendCooldown(60);
-      } else {
-        enqueueSnackbar(res?.message || "Failed to send reset code", { variant: "error" });
+    if (method === "email") {
+      const cleanEmail = email.trim().toLowerCase();
+      if (!cleanEmail) {
+        enqueueSnackbar("Please enter your registered email address", { variant: "error" });
+        return;
       }
-    } catch (err) {
-      enqueueSnackbar("Network error. Please try again.", { variant: "error" });
-    } finally {
-      setLoading(false);
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(cleanEmail)) {
+        enqueueSnackbar("Please enter a valid email address", { variant: "error" });
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const res = await forgotPassword({ email: cleanEmail });
+        if (res?.success) {
+          enqueueSnackbar(res.message || "Verification code sent to your email!", { variant: "success" });
+          if (res.data?.email) setEmail(res.data.email);
+          if (res.data?.maskedTarget) setMaskedTarget(res.data.maskedTarget);
+          setStep(2);
+          setResendCooldown(60);
+        } else {
+          const msg = res?.message || "Failed to send reset code";
+          setErrorMessage(msg);
+          enqueueSnackbar(msg, { variant: "error" });
+        }
+      } catch (err) {
+        const msg = "Network error. Please try again.";
+        setErrorMessage(msg);
+        enqueueSnackbar(msg, { variant: "error" });
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // Phone SMS
+      const cleanPhone = phoneNo.replace(/\D/g, "");
+      if (!cleanPhone) {
+        enqueueSnackbar("Please enter your registered mobile number", { variant: "error" });
+        return;
+      }
+      if (cleanPhone.length < 10) {
+        enqueueSnackbar("Please enter a valid 10-digit mobile number", { variant: "error" });
+        return;
+      }
+
+      setLoading(true);
+      try {
+        const res = await forgotPassword({ phoneNo: cleanPhone });
+        if (res?.success) {
+          enqueueSnackbar(res.message || "SMS verification code sent to your mobile!", { variant: "success" });
+          if (res.data?.phoneNo) setPhoneNo(String(res.data.phoneNo));
+          if (res.data?.maskedTarget) setMaskedTarget(res.data.maskedTarget);
+          setStep(2);
+          setResendCooldown(60);
+        } else {
+          const msg = res?.message || "Failed to send SMS verification code";
+          setErrorMessage(msg);
+          enqueueSnackbar(msg, { variant: "error" });
+        }
+      } catch (err) {
+        const msg = "Network error. Please try again.";
+        setErrorMessage(msg);
+        enqueueSnackbar(msg, { variant: "error" });
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
   const handleResetPassword = async (e) => {
     if (e) e.preventDefault();
+    setErrorMessage("");
+
+    const targetPayload = {};
+    if (method === "phone") {
+      const cleanPhone = phoneNo.replace(/\D/g, "");
+      if (!cleanPhone) {
+        enqueueSnackbar("Please enter your mobile number", { variant: "error" });
+        setStep(1);
+        return;
+      }
+      targetPayload.phoneNo = cleanPhone;
+    } else {
+      const cleanEmail = email.trim().toLowerCase();
+      if (!cleanEmail) {
+        enqueueSnackbar("Please enter your registered email address", { variant: "error" });
+        setStep(1);
+        return;
+      }
+      targetPayload.email = cleanEmail;
+    }
+
     if (!otp.trim()) {
       enqueueSnackbar("Please enter the 6-digit verification code", { variant: "error" });
       return;
@@ -94,7 +173,7 @@ export default function ForgotPassword() {
 
     setLoading(true);
     try {
-      const res = await resetPassword(email.trim(), otp.trim(), newPassword);
+      const res = await resetPassword(targetPayload, otp.trim(), newPassword);
       if (res?.success) {
         enqueueSnackbar("Password reset successfully! Logging you in...", { variant: "success" });
         if (res.data?.user) {
@@ -109,14 +188,24 @@ export default function ForgotPassword() {
           navigate("/login");
         }
       } else {
-        enqueueSnackbar(res?.message || "Password reset failed", { variant: "error" });
+        const msg = res?.message || "Password reset failed";
+        setErrorMessage(msg);
+        enqueueSnackbar(msg, { variant: "error" });
       }
     } catch (err) {
-      enqueueSnackbar("Password reset failed. Please try again.", { variant: "error" });
+      const msg = "Password reset failed. Please try again.";
+      setErrorMessage(msg);
+      enqueueSnackbar(msg, { variant: "error" });
     } finally {
       setLoading(false);
     }
   };
+
+  const targetDisplay =
+    maskedTarget ||
+    (method === "phone"
+      ? (phoneNo ? `+91 ${phoneNo}` : "your mobile")
+      : (email || "your registered email"));
 
   return (
     <Box
@@ -158,19 +247,6 @@ export default function ForgotPassword() {
         >
           {/* Top Section */}
           <Box>
-            {/* Golden Circle Dot */}
-            <Box
-              sx={{
-                width: 44,
-                height: 44,
-                borderRadius: "50%",
-                background: "#F6B867",
-                mb: 4,
-                boxShadow: "0 4px 14px rgba(246, 184, 103, 0.35)",
-              }}
-            />
-
-            {/* Serif Title */}
             <Typography
               component="h1"
               sx={{
@@ -186,7 +262,6 @@ export default function ForgotPassword() {
               Forgot your password?
             </Typography>
 
-            {/* Subtitle */}
             <Typography
               sx={{
                 fontSize: "15px",
@@ -196,7 +271,7 @@ export default function ForgotPassword() {
                 maxWidth: "320px",
               }}
             >
-              Happens to everyone. We'll get you back to ordering in a minute.
+              We'll get you back to ordering in a minute.
             </Typography>
           </Box>
 
@@ -219,7 +294,9 @@ export default function ForgotPassword() {
                 lineHeight: 1.45,
               }}
             >
-              We'll send a 6-digit verification code to your registered email
+              {method === "email"
+                ? "We'll send a 6-digit verification code to your registered email"
+                : "We'll send a 6-digit SMS verification code to your mobile number"}
             </Typography>
           </Box>
         </Box>
@@ -250,66 +327,250 @@ export default function ForgotPassword() {
           >
             Reset password
           </Typography>
+
           <Typography
             sx={{
               color: "#888C95",
               fontSize: "14px",
-              mb: 3.5,
+              mb: 3,
               fontWeight: 400,
             }}
           >
             {step === 1
-              ? "Enter your email to get a verification code."
-              : `Enter the 6-digit code sent to ${email}.`}
+              ? (method === "email"
+                  ? "Enter your registered email to get a verification code."
+                  : "Enter your registered mobile number to get an SMS code.")
+              : (method === "email"
+                  ? `Enter the 6-digit code sent to ${targetDisplay}.`
+                  : `Enter the 6-digit SMS code sent to ${targetDisplay}.`)}
           </Typography>
 
-          {step === 1 ? (
-            /* Step 1: Email Form */
-            <form onSubmit={handleSendOtp}>
-              <Box sx={{ mb: 3 }}>
-                <Typography
-                  component="label"
-                  htmlFor="forgot-email"
-                  sx={{
-                    display: "block",
-                    color: "#D0D2D7",
-                    fontSize: "13.5px",
-                    fontWeight: 500,
-                    mb: 1,
+          {/* Inline Error Recovery Banner */}
+          {errorMessage && (
+            <Box
+              sx={{
+                background: "rgba(200, 74, 42, 0.12)",
+                border: "1px solid rgba(200, 74, 42, 0.35)",
+                borderRadius: "10px",
+                p: 2,
+                mb: 3,
+                display: "flex",
+                flexDirection: "column",
+                gap: 1.2,
+              }}
+            >
+              <Typography sx={{ color: "#F0A895", fontSize: "13px", lineHeight: 1.45 }}>
+                {errorMessage}
+              </Typography>
+              {step === 2 && (
+                <button
+                  type="button"
+                  disabled={loading || resendCooldown > 0}
+                  onClick={handleSendOtp}
+                  style={{
+                    alignSelf: "flex-start",
+                    background: resendCooldown > 0 ? "rgba(200, 74, 42, 0.4)" : "#C84A2A",
+                    color: "#FFFFFF",
+                    border: "none",
+                    borderRadius: "6px",
+                    padding: "7px 14px",
+                    fontSize: "12.5px",
+                    fontWeight: 600,
+                    cursor: loading || resendCooldown > 0 ? "not-allowed" : "pointer",
+                    fontFamily: "inherit",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
                   }}
                 >
-                  Email
-                </Typography>
-                <input
-                  id="forgot-email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="student@dbit.in"
-                  required
+                  {resendCooldown > 0
+                    ? `Resend code in ${resendCooldown}s`
+                    : `⚡ Request New Code via ${method === "phone" ? "SMS" : "Email"}`}
+                </button>
+              )}
+            </Box>
+          )}
+
+          {step === 1 ? (
+            /* Step 1: Target Input Form */
+            <form onSubmit={handleSendOtp}>
+              {/* Method Selector Tabs: Email vs Phone SMS */}
+              <Box
+                sx={{
+                  display: "flex",
+                  background: "#1E2024",
+                  p: "4px",
+                  borderRadius: "12px",
+                  mb: 3,
+                  border: "1px solid #2B2E34",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMethod("email");
+                    setErrorMessage("");
+                  }}
                   style={{
-                    width: "100%",
-                    boxSizing: "border-box",
-                    background: "#1E2024",
-                    border: "1px solid #2B2E34",
-                    borderRadius: "10px",
-                    padding: "13px 16px",
-                    color: "#FFFFFF",
-                    fontSize: "15px",
-                    outline: "none",
-                    transition: "border-color 0.2s, box-shadow 0.2s",
+                    flex: 1,
+                    background: method === "email" ? "#C84A2A" : "transparent",
+                    color: method === "email" ? "#FFFFFF" : "#888C95",
+                    border: "none",
+                    borderRadius: "9px",
+                    padding: "10px 14px",
+                    fontSize: "13.5px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "7px",
+                    transition: "all 0.2s ease",
                     fontFamily: "inherit",
                   }}
-                  onFocus={(e) => {
-                    e.target.style.borderColor = "#C84A2A";
-                    e.target.style.boxShadow = "0 0 0 2px rgba(200, 74, 42, 0.25)";
+                >
+                  <MailOutlineIcon sx={{ fontSize: 17 }} /> Email
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMethod("phone");
+                    setErrorMessage("");
                   }}
-                  onBlur={(e) => {
-                    e.target.style.borderColor = "#2B2E34";
-                    e.target.style.boxShadow = "none";
+                  style={{
+                    flex: 1,
+                    background: method === "phone" ? "#C84A2A" : "transparent",
+                    color: method === "phone" ? "#FFFFFF" : "#888C95",
+                    border: "none",
+                    borderRadius: "9px",
+                    padding: "10px 14px",
+                    fontSize: "13.5px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "7px",
+                    transition: "all 0.2s ease",
+                    fontFamily: "inherit",
                   }}
-                />
+                >
+                  <PhoneIphoneIcon sx={{ fontSize: 17 }} /> Mobile SMS
+                </button>
               </Box>
+
+              {method === "email" ? (
+                /* Email Input */
+                <Box sx={{ mb: 3 }}>
+                  <Typography
+                    component="label"
+                    htmlFor="forgot-email"
+                    sx={{
+                      display: "block",
+                      color: "#D0D2D7",
+                      fontSize: "13.5px",
+                      fontWeight: 500,
+                      mb: 1,
+                    }}
+                  >
+                    Email address
+                  </Typography>
+                  <input
+                    id="forgot-email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="student@dbit.in"
+                    required
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      background: "#1E2024",
+                      border: "1px solid #2B2E34",
+                      borderRadius: "10px",
+                      padding: "13px 16px",
+                      color: "#FFFFFF",
+                      fontSize: "15px",
+                      outline: "none",
+                      transition: "border-color 0.2s, box-shadow 0.2s",
+                      fontFamily: "inherit",
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.borderColor = "#C84A2A";
+                      e.target.style.boxShadow = "0 0 0 2px rgba(200, 74, 42, 0.25)";
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = "#2B2E34";
+                      e.target.style.boxShadow = "none";
+                    }}
+                  />
+                </Box>
+              ) : (
+                /* Phone Number Input */
+                <Box sx={{ mb: 3 }}>
+                  <Typography
+                    component="label"
+                    htmlFor="forgot-phone"
+                    sx={{
+                      display: "block",
+                      color: "#D0D2D7",
+                      fontSize: "13.5px",
+                      fontWeight: 500,
+                      mb: 1,
+                    }}
+                  >
+                    Mobile number
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: "8px" }}>
+                    <Box
+                      sx={{
+                        background: "#1E2024",
+                        border: "1px solid #2B2E34",
+                        borderRadius: "10px",
+                        px: 2,
+                        display: "flex",
+                        alignItems: "center",
+                        color: "#D0D2D7",
+                        fontSize: "14px",
+                        fontWeight: 600,
+                      }}
+                    >
+                      +91
+                    </Box>
+                    <input
+                      id="forgot-phone"
+                      type="tel"
+                      maxLength={10}
+                      value={phoneNo}
+                      onChange={(e) => setPhoneNo(e.target.value.replace(/\D/g, ""))}
+                      placeholder="9876543210"
+                      required
+                      style={{
+                        flex: 1,
+                        boxSizing: "border-box",
+                        background: "#1E2024",
+                        border: "1px solid #2B2E34",
+                        borderRadius: "10px",
+                        padding: "13px 16px",
+                        color: "#FFFFFF",
+                        fontSize: "15px",
+                        outline: "none",
+                        transition: "border-color 0.2s, box-shadow 0.2s",
+                        fontFamily: "inherit",
+                      }}
+                      onFocus={(e) => {
+                        e.target.style.borderColor = "#C84A2A";
+                        e.target.style.boxShadow = "0 0 0 2px rgba(200, 74, 42, 0.25)";
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.borderColor = "#2B2E34";
+                        e.target.style.boxShadow = "none";
+                      }}
+                    />
+                  </Box>
+                </Box>
+              )}
 
               {/* Send Code Button */}
               <button
@@ -340,7 +601,13 @@ export default function ForgotPassword() {
                   if (!loading) e.currentTarget.style.background = "#C84A2A";
                 }}
               >
-                {loading ? <CircularProgress size={20} sx={{ color: "#FFFFFF" }} /> : "Send verification code"}
+                {loading ? (
+                  <CircularProgress size={20} sx={{ color: "#FFFFFF" }} />
+                ) : method === "phone" ? (
+                  "Send SMS verification code"
+                ) : (
+                  "Send verification code"
+                )}
               </button>
 
               {/* Back to sign in */}
@@ -366,6 +633,100 @@ export default function ForgotPassword() {
           ) : (
             /* Step 2: Verification Code & New Password */
             <form onSubmit={handleResetPassword}>
+              {method === "email" && !email && (
+                <Box sx={{ mb: 2 }}>
+                  <Typography
+                    component="label"
+                    htmlFor="forgot-email-step2"
+                    sx={{
+                      display: "block",
+                      color: "#D0D2D7",
+                      fontSize: "13.5px",
+                      fontWeight: 500,
+                      mb: 0.8,
+                    }}
+                  >
+                    Email address
+                  </Typography>
+                  <input
+                    id="forgot-email-step2"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="student@dbit.in"
+                    required
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      background: "#1E2024",
+                      border: "1px solid #2B2E34",
+                      borderRadius: "10px",
+                      padding: "13px 16px",
+                      color: "#FFFFFF",
+                      fontSize: "15px",
+                      outline: "none",
+                      fontFamily: "inherit",
+                    }}
+                  />
+                </Box>
+              )}
+
+              {method === "phone" && !phoneNo && (
+                <Box sx={{ mb: 2 }}>
+                  <Typography
+                    component="label"
+                    htmlFor="forgot-phone-step2"
+                    sx={{
+                      display: "block",
+                      color: "#D0D2D7",
+                      fontSize: "13.5px",
+                      fontWeight: 500,
+                      mb: 0.8,
+                    }}
+                  >
+                    Mobile number
+                  </Typography>
+                  <Box sx={{ display: "flex", gap: "8px" }}>
+                    <Box
+                      sx={{
+                        background: "#1E2024",
+                        border: "1px solid #2B2E34",
+                        borderRadius: "10px",
+                        px: 2,
+                        display: "flex",
+                        alignItems: "center",
+                        color: "#D0D2D7",
+                        fontSize: "14px",
+                        fontWeight: 600,
+                      }}
+                    >
+                      +91
+                    </Box>
+                    <input
+                      id="forgot-phone-step2"
+                      type="tel"
+                      maxLength={10}
+                      value={phoneNo}
+                      onChange={(e) => setPhoneNo(e.target.value.replace(/\D/g, ""))}
+                      placeholder="9876543210"
+                      required
+                      style={{
+                        flex: 1,
+                        boxSizing: "border-box",
+                        background: "#1E2024",
+                        border: "1px solid #2B2E34",
+                        borderRadius: "10px",
+                        padding: "13px 16px",
+                        color: "#FFFFFF",
+                        fontSize: "15px",
+                        outline: "none",
+                        fontFamily: "inherit",
+                      }}
+                    />
+                  </Box>
+                </Box>
+              )}
+
               <Box sx={{ mb: 2 }}>
                 <Typography
                   component="label"
@@ -523,7 +884,7 @@ export default function ForgotPassword() {
                     fontFamily: "inherit",
                   }}
                 >
-                  ← Change email/roll no
+                  ← Change {method === "phone" ? "mobile number" : "email"}
                 </button>
 
                 <button

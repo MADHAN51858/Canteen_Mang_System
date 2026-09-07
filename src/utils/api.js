@@ -107,12 +107,32 @@ export async function logout(){
   return post('/users/logout', {})
 }
 
-export async function forgotPassword(email){
-  return post('/users/forgot-password', { email })
+export async function forgotPassword(target){
+  let body = {};
+  if (typeof target === "string") {
+    if (target.includes("@")) {
+      body = { email: target.trim().toLowerCase() };
+    } else {
+      body = { phoneNo: target.replace(/\D/g, "") };
+    }
+  } else if (target && typeof target === "object") {
+    body = target;
+  }
+  return post('/users/forgot-password', body);
 }
 
-export async function resetPassword(email, otp, newPassword){
-  return post('/users/reset-password', { email, otp, newPassword })
+export async function resetPassword(target, otp, newPassword){
+  let body = { otp: String(otp || "").trim(), newPassword };
+  if (typeof target === "string") {
+    if (target.includes("@")) {
+      body.email = target.trim().toLowerCase();
+    } else {
+      body.phoneNo = target.replace(/\D/g, "");
+    }
+  } else if (target && typeof target === "object") {
+    body = { ...body, ...target };
+  }
+  return post('/users/reset-password', body);
 }
 
 export async function changePassword(newPassword){

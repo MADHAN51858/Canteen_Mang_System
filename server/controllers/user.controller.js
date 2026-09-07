@@ -8,6 +8,7 @@ import { Order } from "../models/order.model.js";
 import { Table } from "../models/table.model.js";
 import { uploadOnCloudinary, deleteFromCloudinaryByUrl } from "../utils/cloudinary.js";
 import { sendPasswordResetOtpEmail } from "../utils/mail.service.js";
+import { sendPasswordResetOtpSms } from "../utils/sms.service.js";
 
 const generateAccesTokenandRefreshToken = async (userId) => {
   try {
@@ -107,6 +108,55 @@ const registerUser = asyncHandler(async (req, res) => {
 });
 
 
+const escapeRegex = (string) => {
+  return String(string).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+};
+
+const buildUserSearchConditions = (rawInput) => {
+  const clean = String(rawInput || "").trim().toLowerCase();
+  if (!clean) return [];
+
+  const escaped = escapeRegex(clean);
+  const conditions = [
+    { email: new RegExp(`^${escaped}$`, "i") },
+    { rollNo: new RegExp(`^${escaped}$`, "i") },
+    { username: new RegExp(`^${escaped}$`, "i") },
+  ];
+
+  // Also support matching padded/unpadded rollNo (e.g. 1db23cs1 <-> 1db23cs001)
+  const rollMatch = clean.match(/^1db23cs(\d+)$/i);
+  if (rollMatch) {
+    const num = parseInt(rollMatch[1], 10);
+    const padded = `1db23cs${String(num).padStart(3, "0")}`;
+    const unpadded = `1db23cs${num}`;
+    conditions.push({ rollNo: new RegExp(`^${padded}$`, "i") });
+    conditions.push({ rollNo: new RegExp(`^${unpadded}$`, "i") });
+    conditions.push({ username: new RegExp(`^${padded}$`, "i") });
+    conditions.push({ username: new RegExp(`^${unpadded}$`, "i") });
+  }
+
+  return conditions;
+};
+
+const maskEmail = (email) => {
+  if (!email || typeof email !== "string" || !email.includes("@")) return email || "";
+  const [local, domain] = email.split("@");
+  if (local.length <= 2) {
+    return `${local[0]}***@${domain}`;
+  }
+  return `${local[0]}***${local[local.length - 1]}@${domain}`;
+};
+
+const maskPhone = (phone) => {
+  if (!phone) return "";
+  const s = String(phone).replace(/\D/g, "");
+  if (s.length <= 4) return s;
+  const start = s.slice(0, 2);
+  const end = s.slice(-2);
+  const middle = "*".repeat(Math.max(2, s.length - 4));
+  return `+91 ${start}${middle}${end}`;
+};
+
 const login = asyncHandler(async (req, res) => {
   const { username, password, email, rollNo } = req.body;
   const rawId = (rollNo || email || username || "").trim().toLowerCase();
@@ -118,25 +168,7 @@ const login = asyncHandler(async (req, res) => {
     throw new ApiError(409, "Email or Roll Number is Required");
   }
 
-  // Support lookup by email, rollNo, or username
-  const orConditions = [
-    { email: rawId },
-    { rollNo: rawId },
-    { username: rawId },
-  ];
-
-  // Also support matching padded/unpadded rollNo (e.g. 1db23cs1 <-> 1db23cs001)
-  const rollMatch = rawId.match(/^1db23cs(\d+)$/i);
-  if (rollMatch) {
-    const num = parseInt(rollMatch[1], 10);
-    const padded = `1db23cs${String(num).padStart(3, "0")}`;
-    const unpadded = `1db23cs${num}`;
-    orConditions.push({ rollNo: padded });
-    orConditions.push({ rollNo: unpadded });
-    orConditions.push({ username: padded });
-    orConditions.push({ username: unpadded });
-  }
-
+  const orConditions = buildUserSearchConditions(rawId);
   const user = await User.findOne({ $or: orConditions });
 
   if (!user) {
@@ -599,7 +631,7 @@ const getMe = asyncHandler(async (req, res) => {
   // This endpoint is used by AuthContext to get the current user
   // req.user is set by the verifyJwt middleware
   const user = await User.findById(req.user._id).select("-password -refreshToken");
-  
+
   if (!user) {
     throw new ApiError(404, "User not found");
   }
@@ -880,92 +912,154 @@ const withdrawAmount = asyncHandler(async (req, res) => {
 });
 
 const forgotPassword = asyncHandler(async (req, res) => {
-  const { email, username, rollNo } = req.body;
-  const input = (rollNo || email || username || "").toLowerCase().trim();
+  const { email, phoneNo } = req.body;
+  const cleanEmail = email ? String(email).trim().toLowerCase() : "";
+  const cleanPhone = phoneNo ? String(phoneNo).replace(/\D/g, "") : "";
 
-  if (!input) {
-    throw new ApiError(400, "Roll number or email is required");
+  if (!cleanEmail && !cleanPhone) {
+    throw new ApiError(400, "Please enter your registered email address or mobile number");
   }
 
-  const user = await User.findOne({
-    $or: [
-      { email: input },
-      { username: input },
-      { rollNo: input },
-    ],
-  });
+  let user = null;
+  let method = "email";
 
-  if (!user) {
-    throw new ApiError(404, "User not found with this roll number or email");
-  }
-
-  if (!user.email) {
-    throw new ApiError(400, "User does not have an email registered. Please contact admin.");
+  if (cleanPhone) {
+    method = "sms";
+    const phoneNum = Number(cleanPhone);
+    if (!phoneNum || cleanPhone.length < 7) {
+      throw new ApiError(400, "Please enter a valid mobile number");
+    }
+    user = await User.findOne({ phoneNo: phoneNum });
+    if (!user) {
+      throw new ApiError(404, "No account found with this registered mobile number");
+    }
+  } else {
+    method = "email";
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      throw new ApiError(400, "Please enter a valid email address");
+    }
+    user = await User.findOne({
+      email: new RegExp(`^${escapeRegex(cleanEmail)}$`, "i"),
+    });
+    if (!user) {
+      throw new ApiError(404, "No account found with this registered email address");
+    }
   }
 
   // Generate 6-digit OTP
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
-  const expiry = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+  // 15 minutes validity
+  const expiry = new Date(Date.now() + 15 * 60 * 1000);
 
   user.resetPasswordOtp = otp;
   user.resetPasswordExpiry = expiry;
   await user.save({ validateBeforeSave: false });
 
-  await sendPasswordResetOtpEmail(user.email, otp, user.username);
+  if (method === "sms") {
+    console.log(`[FORGOT PASSWORD - SMS] Generated OTP "${otp}" for user "${user.username}" (phone: ${user.phoneNo}), expires at ${expiry.toISOString()}`);
+    try {
+      await sendPasswordResetOtpSms(user.phoneNo, otp, user.username);
+    } catch (smsErr) {
+      console.error(`[SMS ERROR in forgotPassword]:`, smsErr.message || smsErr);
+    }
 
-  return res.status(200).json(
-    new ApiResponse(
-      200,
-      { email: user.email },
-      "Verification code sent to your registered email"
-    )
-  );
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        {
+          method: "sms",
+          phoneNo: user.phoneNo,
+          maskedTarget: maskPhone(user.phoneNo),
+          username: user.username,
+        },
+        `Verification code sent via SMS to ${maskPhone(user.phoneNo)}`
+      )
+    );
+  } else {
+    console.log(`[FORGOT PASSWORD - EMAIL] Generated OTP "${otp}" for user "${user.username}" (email: ${user.email}), expires at ${expiry.toISOString()}`);
+    try {
+      await sendPasswordResetOtpEmail(user.email, otp, user.username);
+    } catch (emailErr) {
+      console.error(`[MAIL ERROR in forgotPassword]:`, emailErr.message || emailErr);
+    }
+
+    return res.status(200).json(
+      new ApiResponse(
+        200,
+        {
+          method: "email",
+          email: user.email,
+          maskedTarget: maskEmail(user.email),
+          username: user.username,
+        },
+        `Verification code sent to registered email (${user.email})`
+      )
+    );
+  }
 });
 
 const resetPassword = asyncHandler(async (req, res) => {
-  const { email, otp, newPassword, rollNo } = req.body;
-  const input = (rollNo || email || "").toLowerCase().trim();
+  const { email, phoneNo, otp, newPassword } = req.body;
+  const cleanEmail = email ? String(email).trim().toLowerCase() : "";
+  const cleanPhone = phoneNo ? String(phoneNo).replace(/\D/g, "") : "";
 
-  if (!input || !otp || !newPassword) {
-    throw new ApiError(400, "Roll number or email, OTP, and new password are required");
+  if ((!cleanEmail && !cleanPhone) || !otp || !newPassword) {
+    throw new ApiError(400, "Email or phone number, verification code, and new password are required");
   }
 
   if (String(newPassword).length < 6) {
     throw new ApiError(400, "Password must be at least 6 characters long");
   }
 
-  const user = await User.findOne({
-    $or: [{ email: input }, { username: input }, { rollNo: input }],
-  });
-
-  if (!user) {
-    throw new ApiError(404, "User not found");
+  let user = null;
+  if (cleanPhone) {
+    const phoneNum = Number(cleanPhone);
+    user = await User.findOne({ phoneNo: phoneNum });
+    if (!user) {
+      throw new ApiError(404, "No account found with this registered mobile number");
+    }
+  } else {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      throw new ApiError(400, "Please provide a valid email address");
+    }
+    user = await User.findOne({
+      email: new RegExp(`^${escapeRegex(cleanEmail)}$`, "i"),
+    });
+    if (!user) {
+      throw new ApiError(404, "No account found with this registered email address");
+    }
   }
 
+  console.log(`[RESET PASSWORD ATTEMPT] User: ${user.username} (target: "${cleanPhone || cleanEmail}"), DB OTP: ${user.resetPasswordOtp ? "SET" : "NOT SET"}, Expiry: ${user.resetPasswordExpiry}`);
+
   if (!user.resetPasswordOtp || !user.resetPasswordExpiry) {
-    throw new ApiError(400, "No password reset requested or OTP expired");
+    throw new ApiError(400, "No password reset requested or verification code expired. Please request a new code.");
   }
 
   if (new Date() > new Date(user.resetPasswordExpiry)) {
     user.resetPasswordOtp = undefined;
     user.resetPasswordExpiry = undefined;
     await user.save({ validateBeforeSave: false });
-    throw new ApiError(400, "OTP has expired. Please request a new code.");
+    throw new ApiError(400, "Verification code has expired. Please click 'Resend code' to get a fresh code.");
   }
 
   const cleanDbOtp = String(user.resetPasswordOtp || "").trim();
   const cleanInputOtp = String(otp || "").trim();
 
   if (cleanDbOtp !== cleanInputOtp) {
-    console.log(`[OTP MISMATCH] Expected: "${cleanDbOtp}", Received: "${cleanInputOtp}" for user: ${user.username}`);
-    throw new ApiError(400, "Invalid verification code");
+    console.log(`[OTP MISMATCH] User: ${user.username}, Expected: "${cleanDbOtp}", Received: "${cleanInputOtp}"`);
+    throw new ApiError(400, "Invalid verification code. Please check the code received and try again.");
   }
 
   // Update password (pre('save') hook hashes it with bcrypt)
   user.password = newPassword;
   user.resetPasswordOtp = undefined;
   user.resetPasswordExpiry = undefined;
-  await user.save();
+  await user.save({ validateBeforeSave: false });
+
+  console.log(`[RESET PASSWORD SUCCESS] Password successfully reset for user: ${user.username} (${user.email || user.phoneNo})`);
 
   // Automatically log in the user with newly reset credentials
   const { accessToken, refreshToken } = await generateAccesTokenandRefreshToken(
@@ -988,6 +1082,7 @@ const resetPassword = asyncHandler(async (req, res) => {
   return res
     .status(200)
     .cookie("accessToken", accessToken, cookieOptions)
+    .cookie("refreshToken", refreshToken, cookieOptions)
     .json(
       new ApiResponse(
         200,
