@@ -48,6 +48,7 @@ import {
   ListItemIcon,
   ListItemText,
   Rating,
+  Collapse,
 } from "@mui/material";
 
 // Icons
@@ -92,6 +93,8 @@ import FastfoodOutlinedIcon from "@mui/icons-material/FastfoodOutlined";
 import BakeryDiningOutlinedIcon from "@mui/icons-material/BakeryDiningOutlined";
 import StarRoundedIcon from "@mui/icons-material/StarRounded";
 import ShoppingBagIcon from "@mui/icons-material/ShoppingBag";
+import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
+import PersonRoundedIcon from "@mui/icons-material/PersonRounded";
 
 // Standard restaurant veg / non-veg indicator (square with colored circle)
 function RestaurantVegIcon({ isVeg = true, size = 16 }) {
@@ -300,7 +303,10 @@ export function matchFoodCategory(food, targetCategory) {
   if (!targetCategory || targetCategory === "all") return true;
   const catLower = targetCategory.toLowerCase();
   const itemCat = String(food?.category || "").trim().toLowerCase();
-  return itemCat === catLower;
+  if (itemCat === catLower) return true;
+  if ((catLower === "burger" || catLower === "burgers") && (itemCat === "burger" || itemCat === "burgers")) return true;
+  if ((catLower === "drinks" || catLower === "beverages" || catLower === "drink") && (itemCat === "drinks" || itemCat === "beverages" || itemCat === "drink")) return true;
+  return false;
 }
 
 export default function Menu() {
@@ -390,6 +396,13 @@ export default function Menu() {
   const [tableNameInput, setTableNameInput] = useState("");
   const [joinInput, setJoinInput] = useState("");
   const [tableModalTab, setTableModalTab] = useState("create"); // 'create' | 'join' - by default create is active
+  const [expandedUsers, setExpandedUsers] = useState({});
+  const toggleUserAccordion = useCallback((uName) => {
+    setExpandedUsers((prev) => ({
+      ...prev,
+      [uName]: prev[uName] === undefined ? false : !prev[uName],
+    }));
+  }, []);
 
   // Order Details & Checkout State (Students only)
   const [deliveryType, setDeliveryType] = useState("Dine in"); // 'Dine in' | 'Take Away' | 'Delivery'
@@ -689,7 +702,7 @@ export default function Menu() {
 
     dbCategories.forEach((cat) => {
       const id = cat.name;
-      const count = countMap[cat.name.toLowerCase()] || 0;
+      const count = allFoods.filter((f) => matchFoodCategory(f, cat.name)).length;
       const icon = getCategoryIcon(cat.icon, cat.name);
       list.push({
         id,
@@ -953,11 +966,85 @@ export default function Menu() {
     return Number((subTotal + taxAmount).toFixed(2));
   }, [subTotal, taxAmount]);
 
+  // Helper: check if a member has added any items to the table cart
+  const memberHasItems = useCallback(
+    (memberUsername) => {
+      if (!activeTable || !Array.isArray(activeTable.items)) return false;
+      const u = String(memberUsername || "").trim().toLowerCase();
+      return activeTable.items.some(
+        (it) => String(it.addedBy?.username || "").trim().toLowerCase() === u
+      );
+    },
+    [activeTable]
+  );
+
+  // Helper: member readiness - if member has not added any items, count him as continue by default!
+  const isMemberReady = useCallback(
+    (member) => {
+      if (!member) return true;
+      if (!memberHasItems(member.username)) {
+        return true; // No items in cart = auto-continue
+      }
+      return Boolean(member.isReady);
+    },
+    [memberHasItems]
+  );
+
+  const currentUserHasItems = useMemo(() => {
+    return memberHasItems(currentUsername);
+  }, [memberHasItems, currentUsername]);
+
   const isCurrentUserReady = useMemo(() => {
     if (!activeTable) return false;
-    const m = activeTable.members.find((m) => m.username === currentUsername);
-    return Boolean(m?.isReady);
-  }, [activeTable, currentUsername]);
+    const m = activeTable.members.find(
+      (m) => String(m.username || "").toLowerCase() === String(currentUsername || "").toLowerCase()
+    );
+    return isMemberReady(m);
+  }, [activeTable, currentUsername, isMemberReady]);
+
+  // Active users list for accordion rendering (Host first, then all members)
+  const tableActiveUsers = useMemo(() => {
+    if (!activeTable) return [];
+    const members = Array.isArray(activeTable.members) ? [...activeTable.members] : [];
+    const seen = new Set(members.map((m) => String(m.username || "").toLowerCase()));
+
+    if (Array.isArray(activeTable.items)) {
+      activeTable.items.forEach((it) => {
+        const u = String(it.addedBy?.username || "").toLowerCase();
+        if (u && !seen.has(u)) {
+          seen.add(u);
+          members.push({
+            username: u,
+            name: it.addedBy?.name || u,
+            avatar: it.addedBy?.avatar || "",
+            isReady: false,
+          });
+        }
+      });
+    }
+
+    const hostUser = String(activeTable.creator || "").toLowerCase();
+    members.forEach((m) => {
+      const u = String(m.username || "").toLowerCase();
+      if (!m.avatar) {
+        if (u === hostUser && activeTable.creatorAvatar) {
+          m.avatar = activeTable.creatorAvatar;
+        } else if (u === String(user?.username || "").toLowerCase() && user?.avatar) {
+          m.avatar = user.avatar;
+        }
+      }
+    });
+
+    members.sort((a, b) => {
+      const aIsHost = String(a.username || "").toLowerCase() === hostUser;
+      const bIsHost = String(b.username || "").toLowerCase() === hostUser;
+      if (aIsHost) return -1;
+      if (bIsHost) return 1;
+      return 0;
+    });
+
+    return members;
+  }, [activeTable, user]);
 
   // Joined members at the table excluding the creator
   const joinedMembersList = useMemo(() => {
@@ -972,17 +1059,17 @@ export default function Menu() {
 
   const allJoinedMembersReady = useMemo(() => {
     if (joinedMembersList.length === 0) return true;
-    return joinedMembersList.every((m) => Boolean(m.isReady));
-  }, [joinedMembersList]);
+    return joinedMembersList.every((m) => isMemberReady(m));
+  }, [joinedMembersList, isMemberReady]);
 
   const readyJoinedCount = useMemo(() => {
-    return joinedMembersList.filter((m) => Boolean(m.isReady)).length;
-  }, [joinedMembersList]);
+    return joinedMembersList.filter((m) => isMemberReady(m)).length;
+  }, [joinedMembersList, isMemberReady]);
 
   const readyCount = useMemo(() => {
     if (!activeTable || !Array.isArray(activeTable.members)) return 0;
-    return activeTable.members.filter((m) => m.isReady).length;
-  }, [activeTable]);
+    return activeTable.members.filter((m) => isMemberReady(m)).length;
+  }, [activeTable, isMemberReady]);
 
   // 11. Final Place Order with CASH / UPI / WALLET
   const handlePlaceOrder = async () => {
@@ -999,10 +1086,10 @@ export default function Menu() {
       return;
     }
 
-    // Table Order check: All joined members must have clicked Continue
+    // Table Order check: All joined members must have clicked Continue (members with 0 items are auto-counted as continue)
     if (activeTable && isTableCreator && joinedMembersList.length > 0 && !allJoinedMembersReady) {
       const pendingMembers = joinedMembersList
-        .filter((m) => !m.isReady)
+        .filter((m) => !isMemberReady(m))
         .map((m) => m.name || m.username)
         .join(", ");
       enqueueSnackbar(
@@ -1365,910 +1452,983 @@ export default function Menu() {
           flexDirection: "column",
           minWidth: 0,
           height: "100%",
-          p: { xs: 2, sm: 2.5, md: 3 },
-          overflowY: "auto",
+          p: { xs: 1.5, sm: 2 },
+          pr: { xs: 1, sm: 1.5 },
+          overflow: "hidden",
           boxSizing: "border-box",
         }}
       >
-        {/* 1. Top Bar: Products Header, Search with ⌘ K, Filter Button, + Add Product */}
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: { xs: 1, sm: 1.5 },
-            mb: 2.5,
-            flexShrink: 0,
-          }}
-        >
-  
-
-          {/* Search Input with ⌘ K badge */}
-          <TextField
-            fullWidth
-            inputRef={searchInputRef}
-            placeholder="Search products, categories..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            InputProps={{
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon sx={{ color: "#94a3b8", fontSize: 22, ml: 0.5 }} />
-                </InputAdornment>
-              ),
-              endAdornment: (
-                <InputAdornment position="end">
-                  <Box
-                    onClick={() => searchInputRef.current?.focus()}
-                    sx={{
-                      display: { xs: "none", md: "flex" },
-                      alignItems: "center",
-                      gap: 0.3,
-                      px: 0.9,
-                      py: 0.3,
-                      borderRadius: "8px",
-                      backgroundColor: "#f1f5f9",
-                      border: "1px solid #e2e8f0",
-                      color: "#64748b",
-                      fontSize: "0.72rem",
-                      fontWeight: 700,
-                      cursor: "pointer",
-                      userSelect: "none",
-                    }}
-                  >
-                    ⌘ K
-                  </Box>
-                </InputAdornment>
-              ),
-            }}
-            sx={{
-              "& .MuiOutlinedInput-root": {
-                backgroundColor: "#ffffff",
-                borderRadius: "16px",
-                height: 48,
-                border: "1px solid #e2e8f0",
-                fontSize: "0.92rem",
-                boxShadow: "none",
-                "&:hover": { borderColor: "#cbd5e1" },
-                "&.Mui-focused": {
-                  borderColor: "#88f1afff",
-                  boxShadow: "none",
-                },
-              },
-            }}
-          />
-
-          {/* Filter Button with active indicator */}
-          <Tooltip title="Filter by food type, ingredient & price range">
-            <IconButton
-              onClick={(e) => setFilterAnchorEl(e.currentTarget)}
-              sx={{
-                backgroundColor: hasActiveFilters ? "#ecfdf5" : "#ffffff",
-                border: hasActiveFilters ? "1.5px solid #22c55e" : "1px solid #e2e8f0",
-                borderRadius: "10px",
-                width: 48,
-                height: 48,
-                color: hasActiveFilters ? "#047857" : "#0f172a",
-                boxShadow: "none",
-                flexShrink: 0,
-                "&:hover": { backgroundColor: hasActiveFilters ? "#d1fae5" : "#f1f5f9" },
-              }}
-            >
-              <Badge
-                badgeContent={activeFilterCount}
-                color="success"
-                invisible={!hasActiveFilters}
-                sx={{
-                  "& .MuiBadge-badge": {
-                    backgroundColor: "#059669",
-                    color: "white",
-                    fontSize: "0.68rem",
-                    height: 16,
-                    minWidth: 16,
-                    fontWeight: 800,
-                  },
-                }}
-              >
-                <TuneRoundedIcon sx={{ fontSize: 22 }} />
-              </Badge>
-            </IconButton>
-          </Tooltip>
-
-          {/* ADMIN ONLY: Add Dish Button & Add Category Button */}
-          {isAdminOrStaff && (
-            <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
-              <Button
-                variant="contained"
-                startIcon={<AddRoundedIcon />}
-                onClick={() => setAddDishOpen(true)}
-                sx={{
-                  backgroundColor: "#0088ff",
-                  color: "#ffffff",
-                  fontWeight: 800,
-                  fontSize: "0.88rem",
-                  height: 48,
-                  borderRadius: "10px",
-                  boxShadow: "none",
-                  px: 2.2,
-                  textTransform: "none",
-                  whiteSpace: "nowrap",
-                  "&:hover": { backgroundColor: "#0070d6" },
-                }}
-              >
-                Add Product
-              </Button>
-              <Button
-                variant="outlined"
-                startIcon={<AddRoundedIcon />}
-                onClick={() => setAddCategoryOpen(true)}
-                sx={{
-                  borderColor: "#cbd5e1",
-                  color: "#334155",
-                  fontWeight: 700,
-                  fontSize: "0.85rem",
-                  height: 48,
-                  borderRadius: "10px",
-                  px: 2,
-                  textTransform: "none",
-                  whiteSpace: "nowrap",
-                  backgroundColor: "#ffffff",
-                  "&:hover": { borderColor: "#059669", color: "#059669", backgroundColor: "#f0fdf4" },
-                }}
-              >
-                Add Category
-              </Button>
-            </Stack>
-          )}
-        </Box>
-
-        {/* 2. Category Cards Row (All, Breakfast, Burgers, Beverages, etc.) */}
-        <Box
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 1.2,
-            mb: 2,
-            flexShrink: 0,
-            position: "relative",
-            width: "100%",
-          }}
-        >
-          {/* Left Navigation Chevron Button (flex-start) */}
-          <IconButton
-            size="small"
-            onClick={() => categoryScrollRef.current?.scrollBy({ left: -220, behavior: "smooth" })}
-            sx={{
-              flexShrink: 0,
-              width: 36,
-              height: 36,
-              backgroundColor: "#ffffff",
-              border: "1px solid #e2e8f0",
-              color: "#475569",
-              boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
-              "&:hover": { backgroundColor: "#f8fafc", color: "#0f172a" },
-              display: { xs: "none", sm: "flex" },
-            }}
-          >
-            <ChevronLeftRoundedIcon fontSize="small" />
-          </IconButton>
-
-          {/* In Between: Scrollable Category Cards */}
+        {/* FIXED HEADER: Search Bar & Category Filters (Stays fixed at the top) */}
+        <Box sx={{ flexShrink: 0, display: "flex", flexDirection: "column" }}>
+          {/* 1. Top Bar: Products Header, Search with ⌘ K, Filter Button, + Add Product */}
           <Box
-            ref={categoryScrollRef}
             sx={{
               display: "flex",
               alignItems: "center",
-              gap: 1.5,
-              overflowX: "auto",
-              pb: 1,
-              pt: 0.5,
-              flex: 1,
-              minWidth: 0,
-              scrollBehavior: "smooth",
-              "&::-webkit-scrollbar": { display: "none" },
-              scrollbarWidth: "none",
+              gap: { xs: 1, sm: 1.5 },
+              mb: 2,
+              flexShrink: 0,
             }}
           >
-            {categoriesList.map((cat) => {
-              const isSelected = selectedCategory.toLowerCase() === cat.id.toLowerCase();
-              const emoji = getCategoryVisual(cat.icon, cat.name || cat.label);
+            {/* Search Input with ⌘ K badge */}
+            <TextField
+              fullWidth
+              inputRef={searchInputRef}
+              placeholder="Search products, categories..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              InputProps={{
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{ color: "#94a3b8", fontSize: 21, ml: 0.5 }} />
+                  </InputAdornment>
+                ),
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <Box
+                      onClick={() => searchInputRef.current?.focus()}
+                      sx={{
+                        display: { xs: "none", md: "flex" },
+                        alignItems: "center",
+                        gap: 0.3,
+                        px: 0.9,
+                        py: 0.3,
+                        borderRadius: "8px",
+                        backgroundColor: "#f1f5f9",
+                        border: "1px solid #e2e8f0",
+                        color: "#64748b",
+                        fontSize: "0.72rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        userSelect: "none",
+                      }}
+                    >
+                      ⌘ K
+                    </Box>
+                  </InputAdornment>
+                ),
+              }}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  backgroundColor: "#ffffff",
+                  borderRadius: "10px",
+                  height: 44,
+                  border: "1px solid #e2e8f0",
+                  fontSize: "0.9rem",
+                  boxShadow: "none",
+                  "&:hover": { borderColor: "#cbd5e1" },
+                  "&.Mui-focused": {
+                    borderColor: "#3b82f6",
+                    boxShadow: "0 0 0 3px rgba(59, 130, 246, 0.1)",
+                  },
+                  "& fieldset": { border: "none" },
+                },
+              }}
+            />
 
-              return (
-                <Box
-                  key={cat.id}
-                  onClick={() => setSelectedCategory(cat.id)}
+            {/* Filter Button with active indicator */}
+            <Tooltip title="Filter by food type, ingredient & price range">
+              <IconButton
+                onClick={(e) => setFilterAnchorEl(e.currentTarget)}
+                sx={{
+                  backgroundColor: hasActiveFilters ? "#eff6ff" : "#ffffff",
+                  border: hasActiveFilters ? "1.5px solid #3b82f6" : "1px solid #e2e8f0",
+                  borderRadius: "10px",
+                  width: 44,
+                  height: 44,
+                  color: hasActiveFilters ? "#2563eb" : "#64748b",
+                  boxShadow: "none",
+                  flexShrink: 0,
+                  "&:hover": { backgroundColor: hasActiveFilters ? "#dbeafe" : "#f1f5f9", color: "#0f172a" },
+                }}
+              >
+                <Badge
+                  badgeContent={activeFilterCount}
+                  invisible={!hasActiveFilters}
                   sx={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: 1.1,
-                    height: 44,
-                    pl: 0.6,
-                    pr: isAdminOrStaff && cat.id !== "all" ? 1 : 2.4,
-                    borderRadius: "9999px",
-                    cursor: "pointer",
-                    backgroundColor: isSelected ? "#ea5e21" : "#fcd8cb",
-                    color: "#ffffff",
-                    boxShadow: isSelected
-                      ? "0 4px 14px rgba(234, 94, 33, 0.35)"
-                      : "0 2px 6px rgba(0,0,0,0.03)",
-                    transition: "all 0.2s cubic-bezier(0.4, 0, 0.2, 1)",
-                    userSelect: "none",
-                    flexShrink: 0,
-                    position: "relative",
-                    "&:hover": {
-                      transform: "translateY(-1px)",
-                      backgroundColor: isSelected ? "#df531b" : "#fbcab9",
-                      boxShadow: isSelected
-                        ? "0 6px 18px rgba(234, 94, 33, 0.42)"
-                        : "0 4px 10px rgba(0,0,0,0.06)",
+                    "& .MuiBadge-badge": {
+                      backgroundColor: "#2563eb",
+                      color: "white",
+                      fontSize: "0.68rem",
+                      height: 16,
+                      minWidth: 16,
+                      fontWeight: 800,
                     },
                   }}
                 >
-                  {/* Circular White Disc for Icon */}
-                  <Box
+                  <TuneRoundedIcon sx={{ fontSize: 20 }} />
+                </Badge>
+              </IconButton>
+            </Tooltip>
+
+            {/* STUDENT ONLY: Open Cart Button (Visible in top bar when cart is collapsed) */}
+            {!isAdminOrStaff && cartCollapsed && (
+              <Button
+                variant="outlined"
+                onClick={() => setCartCollapsed(false)}
+                startIcon={
+                  <Badge
+                    badgeContent={cart.length}
+                    color="primary"
                     sx={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: "50%",
-                      backgroundColor: "#ffffff",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
-                      flexShrink: 0,
-                      fontSize: "18px",
-                      lineHeight: 1,
+                      "& .MuiBadge-badge": {
+                        backgroundColor: "#2563eb",
+                        color: "white",
+                        fontSize: "0.68rem",
+                        fontWeight: 800,
+                      },
                     }}
                   >
-                    {emoji}
-                  </Box>
-
-                  {/* Category Label */}
-                  <Typography
-                    sx={{
-                      fontWeight: 700,
-                      fontSize: "0.95rem",
-                      color: "#ffffff",
-                      lineHeight: 1,
-                      whiteSpace: "nowrap",
-                      letterSpacing: "0.01em",
-                      textShadow: isSelected ? "none" : "0 1px 2px rgba(180, 80, 50, 0.18)",
-                    }}
-                  >
-                    {cat.label}
-                  </Typography>
-
-                  {/* Admin Edit & Delete Actions */}
-                  {isAdminOrStaff && cat.id !== "all" && (
-                    <Stack direction="row" spacing={0.3} sx={{ ml: 0.5, alignItems: "center" }}>
-                      <Tooltip title={`Edit "${cat.label}"`} arrow>
-                        <IconButton
-                          size="small"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleOpenEditCategory(cat);
-                          }}
-                          sx={{
-                            width: 22,
-                            height: 22,
-                            backgroundColor: "#ffffff",
-                            color: "#ea5e21",
-                         
-                            p: 0,
-                          }}
-                        >
-                          <EditRoundedIcon sx={{ fontSize: 13 }} />
-                        </IconButton>
-                      </Tooltip>
-
-                      <Tooltip title={`Remove "${cat.label}"`} arrow>
-                        <IconButton
-                          size="small"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setCategoryToDelete(cat);
-                            setDeleteCatConfirmOpen(true);
-                          }}
-                          sx={{
-                            width: 22,
-                            height: 22,
-                            backgroundColor: "#ef4444",
-                              color: "#ffffff",
-                              "&:hover": {
-                                backgroundColor: "#dc2626",
-                              },
-                            p: 0,
-                          }}
-                        >
-                          <CloseRoundedIcon sx={{ fontSize: 13 }} />
-                        </IconButton>
-                      </Tooltip>
-                    </Stack>
-                  )}
-                </Box>
-              );
-            })}
-
-            {/* Admin "+ Add Category" Pill */}
-            {isAdminOrStaff && (
-              <Box
-                onClick={() => setAddCategoryOpen(true)}
+                    <ShoppingBagIcon sx={{ fontSize: 18 }} />
+                  </Badge>
+                }
                 sx={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 1,
+                  borderColor: "#e2e8f0",
+                  color: "#2563eb",
+                  fontWeight: 700,
+                  fontSize: "0.85rem",
                   height: 44,
-                  pl: 0.8,
-                  pr: 2,
-                  borderRadius: "9999px",
-                  cursor: "pointer",
+                  borderRadius: "10px",
+                  px: 1.8,
+                  textTransform: "none",
                   backgroundColor: "#ffffff",
-                  border: "1.5px dashed #cbd5e1",
-                  color: "#64748b",
-                  transition: "all 0.2s ease",
-                  userSelect: "none",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                  "&:hover": { borderColor: "#2563eb", backgroundColor: "#eff6ff" },
                   flexShrink: 0,
-                  "&:hover": {
-                    transform: "translateY(-1px)",
-                    borderColor: "#ea5e21",
-                    color: "#ea5e21",
-                    backgroundColor: "#fff7f5",
-                  },
+                  whiteSpace: "nowrap",
                 }}
               >
-                <Box
+                Cart {cart.length > 0 ? `(${cart.length})` : ""}
+              </Button>
+            )}
+
+            {/* ADMIN ONLY: Add Dish Button & Add Category Button */}
+            {isAdminOrStaff && (
+              <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
+                <Button
+                  variant="contained"
+                  startIcon={<AddRoundedIcon />}
+                  onClick={() => setAddDishOpen(true)}
                   sx={{
-                    width: 30,
-                    height: 30,
-                    borderRadius: "50%",
-                    backgroundColor: "#f1f5f9",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "inherit",
-                  }}
-                >
-                  <AddRoundedIcon sx={{ fontSize: 18 }} />
-                </Box>
-                <Typography
-                  sx={{
+                    backgroundColor: "#2563eb",
+                    color: "#ffffff",
                     fontWeight: 700,
                     fontSize: "0.85rem",
-                    lineHeight: 1,
+                    height: 44,
+                    borderRadius: "10px",
+                    boxShadow: "0 2px 6px rgba(37, 99, 235, 0.2)",
+                    px: 2,
+                    textTransform: "none",
                     whiteSpace: "nowrap",
+                    "&:hover": { backgroundColor: "#1d4ed8" },
                   }}
                 >
-                   Add Category
-                </Typography>
-              </Box>
+                  Add Product
+                </Button>
+                <Button
+                  variant="outlined"
+                  startIcon={<AddRoundedIcon />}
+                  onClick={() => setAddCategoryOpen(true)}
+                  sx={{
+                    borderColor: "#e2e8f0",
+                    color: "#475569",
+                    fontWeight: 700,
+                    fontSize: "0.85rem",
+                    height: 44,
+                    borderRadius: "10px",
+                    px: 1.8,
+                    textTransform: "none",
+                    whiteSpace: "nowrap",
+                    backgroundColor: "#ffffff",
+                    "&:hover": { borderColor: "#2563eb", color: "#2563eb", backgroundColor: "#eff6ff" },
+                  }}
+                >
+                  Add Category
+                </Button>
+              </Stack>
             )}
           </Box>
 
-          {/* Right Navigation Chevron Button (flex-end) */}
-          <IconButton
-            size="small"
-            onClick={() => categoryScrollRef.current?.scrollBy({ left: 220, behavior: "smooth" })}
+          {/* 2. Category Cards Row (All, Breakfast, Burgers, Beverages, etc.) */}
+          <Box
             sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1,
+              mb: 2,
               flexShrink: 0,
-              width: 36,
-              height: 36,
-              backgroundColor: "#ffffff",
-              border: "1px solid #e2e8f0",
-              color: "#475569",
-              boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
-              "&:hover": { backgroundColor: "#f8fafc", color: "#0f172a" },
-              display: { xs: "none", sm: "flex" },
+              position: "relative",
+              width: "100%",
             }}
           >
-            <ChevronRightRoundedIcon fontSize="small" />
-          </IconButton>
-        </Box>
+            {/* Left Navigation Chevron Button (flex-start) */}
+            <IconButton
+              size="small"
+              onClick={() => categoryScrollRef.current?.scrollBy({ left: -220, behavior: "smooth" })}
+              sx={{
+                flexShrink: 0,
+                width: 34,
+                height: 34,
+                backgroundColor: "#ffffff",
+                border: "1px solid #e2e8f0",
+                color: "#64748b",
+                borderRadius: "10px",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                "&:hover": { backgroundColor: "#f8fafc", color: "#0f172a", borderColor: "#cbd5e1" },
+                display: { xs: "none", sm: "flex" },
+              }}
+            >
+              <ChevronLeftRoundedIcon fontSize="small" />
+            </IconButton>
 
+            {/* In Between: Scrollable Category Cards */}
+            <Box
+              ref={categoryScrollRef}
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 1.2,
+                overflowX: "auto",
+                pb: 0.8,
+                pt: 0.2,
+                flex: 1,
+                minWidth: 0,
+                scrollBehavior: "smooth",
+                "&::-webkit-scrollbar": { display: "none" },
+                scrollbarWidth: "none",
+              }}
+            >
+              {categoriesList.map((cat) => {
+                const isSelected = selectedCategory.toLowerCase() === cat.id.toLowerCase();
+                const emoji = getCategoryVisual(cat.icon, cat.name || cat.label);
 
-        {/* 3. Food Products Grid */}
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: isAdminOrStaff
-              ? "repeat(4, minmax(0, 1fr))"
-              : cartCollapsed
-              ? "repeat(4, minmax(0, 1fr))"
-              : "repeat(3, minmax(0, 1fr))",
-            gap: 2,
-            alignItems: "start",
-            alignContent: "start",
-            mb: 3,
-          }}
-        >
-          {loadingFoods ? (
-            Array.from({ length: 8 }).map((_, idx) => (
-              <Box
-                key={idx}
-                sx={{
-                  backgroundColor: "#ffffff",
-                  borderRadius: "22px",
-                  p: 1.8,
-                  border: "1px solid #f1f5f9",
-                }}
-              >
-                <Skeleton variant="rounded" width="100%" height={150} sx={{ borderRadius: "16px", mb: 1.5 }} />
-                <Skeleton variant="text" width="80%" height={22} />
-                <Skeleton variant="text" width="40%" height={18} sx={{ mb: 1 }} />
-                <Skeleton variant="rounded" width="100%" height={38} sx={{ borderRadius: "10px" }} />
-              </Box>
-            ))
-          ) : filteredFoods.length === 0 ? (
-            <Box sx={{ gridColumn: "1 / -1", textAlign: "center", py: 8 }}>
-              <Typography sx={{ fontSize: "1.1rem", fontWeight: 700, color: "#0f172a", mb: 1 }}>
-                No dishes found
-              </Typography>
-              <Typography sx={{ color: "#94a3b8", fontSize: "0.88rem" }}>
-                Try adjusting your search or resetting active filters.
-              </Typography>
-              {hasActiveFilters && (
-                <Button
-                  variant="outlined"
-                  size="small"
-                  onClick={handleResetFilters}
-                  sx={{ mt: 2, textTransform: "none", borderRadius: "10px" }}
-                >
-                  Reset Filters
-                </Button>
-              )}
-            </Box>
-          ) : (
-            filteredFoods.map((food) => {
-              const qtyInCart = getItemCartQty(food._id);
-              const isInCart = qtyInCart > 0;
-              const isVeg = checkIsVeg(food);
-              const imageUrl = food.image || getFallbackImage(food.itemname);
-              const stock = Number(food.stock || 0);
+                return (
+                  <Box
+                    key={cat.id}
+                    onClick={() => setSelectedCategory(cat.id)}
+                    sx={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: 1,
+                      height: 40,
+                      pl: 0.6,
+                      pr: isAdminOrStaff && cat.id !== "all" ? 1 : 2,
+                      borderRadius: "9999px",
+                      cursor: "pointer",
+                      backgroundColor: isSelected ? "#2563eb" : "#ffffff",
+                      color: isSelected ? "#ffffff" : "#475569",
+                      border: isSelected ? "1px solid #2563eb" : "1px solid #e2e8f0",
+                      boxShadow: isSelected
+                        ? "0 3px 10px rgba(37, 99, 235, 0.25)"
+                        : "0 1px 2px rgba(0,0,0,0.02)",
+                      transition: "all 0.18s cubic-bezier(0.4, 0, 0.2, 1)",
+                      userSelect: "none",
+                      flexShrink: 0,
+                      position: "relative",
+                      "&:hover": {
+                        transform: "translateY(-1px)",
+                        backgroundColor: isSelected ? "#1d4ed8" : "#f8fafc",
+                        borderColor: isSelected ? "#1d4ed8" : "#cbd5e1",
+                        color: isSelected ? "#ffffff" : "#0f172a",
+                        boxShadow: isSelected
+                          ? "0 4px 14px rgba(37, 99, 235, 0.32)"
+                          : "0 2px 6px rgba(0,0,0,0.04)",
+                      },
+                    }}
+                  >
+                    {/* Circular Disc for Icon */}
+                    <Box
+                      sx={{
+                        width: 28,
+                        height: 28,
+                        borderRadius: "50%",
+                        backgroundColor: isSelected ? "rgba(255, 255, 255, 0.22)" : "#f1f5f9",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                        fontSize: "16px",
+                        lineHeight: 1,
+                      }}
+                    >
+                      {emoji}
+                    </Box>
 
-              let avg = 0;
-              let totalCount = 0;
-              if (Array.isArray(food.ratings) && food.ratings.length > 0) {
-                const sum = food.ratings.reduce((s, r) => s + (Number(r.rating) || 0), 0);
-                avg = sum / food.ratings.length;
-                totalCount = food.ratings.length;
-              } else if (typeof food.averageRating === "number" && food.averageRating > 0 && typeof food.totalRatings === "number" && food.totalRatings > 0) {
-                avg = food.averageRating;
-                totalCount = food.totalRatings;
-              }
-              const foodAvgRating = totalCount > 0 && avg > 0 ? (Math.round(avg * 10) / 10).toFixed(1) : null;
-              const foodTotalRatings = totalCount;
+                    {/* Category Label */}
+                    <Typography
+                      sx={{
+                        fontWeight: isSelected ? 700 : 600,
+                        fontSize: "0.88rem",
+                        color: "inherit",
+                        lineHeight: 1,
+                        whiteSpace: "nowrap",
+                        letterSpacing: "0.01em",
+                      }}
+                    >
+                      {cat.label}
+                    </Typography>
 
-              const myRatingObj = Array.isArray(food.ratings)
-                ? food.ratings.find(
-                    (r) =>
-                      r.user &&
-                      (String(r.user._id || r.user) === String(user?._id) ||
-                        (user?.username && String(r.user?.username || "").toLowerCase() === String(user?.username).toLowerCase()))
-                  )
-                : null;
-              const myRating = myRatingObj ? Number(myRatingObj.rating) : 0;
+                    {/* Admin Edit & Delete Actions */}
+                    {isAdminOrStaff && cat.id !== "all" && (
+                      <Stack direction="row" spacing={0.3} sx={{ ml: 0.4, alignItems: "center" }}>
+                        <Tooltip title={`Edit "${cat.label}"`} arrow>
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenEditCategory(cat);
+                            }}
+                            sx={{
+                              width: 22,
+                              height: 22,
+                              backgroundColor: isSelected ? "rgba(255,255,255,0.2)" : "#f1f5f9",
+                              color: isSelected ? "#ffffff" : "#2563eb",
+                              "&:hover": {
+                                backgroundColor: isSelected ? "rgba(255,255,255,0.35)" : "#e2e8f0",
+                              },
+                              p: 0,
+                            }}
+                          >
+                            <EditRoundedIcon sx={{ fontSize: 12 }} />
+                          </IconButton>
+                        </Tooltip>
 
-              const origPrice = food.originalPrice && food.originalPrice > food.price 
-                ? food.originalPrice 
-                : (food.offer > 0 ? Math.round(food.price / (1 - food.offer / 100)) : 0);
+                        <Tooltip title={`Remove "${cat.label}"`} arrow>
+                          <IconButton
+                            size="small"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setCategoryToDelete(cat);
+                              setDeleteCatConfirmOpen(true);
+                            }}
+                            sx={{
+                              width: 22,
+                              height: 22,
+                              backgroundColor: isSelected ? "rgba(239,68,68,0.85)" : "#fee2e2",
+                              color: isSelected ? "#ffffff" : "#ef4444",
+                              "&:hover": {
+                                backgroundColor: "#ef4444",
+                                color: "#ffffff",
+                              },
+                              p: 0,
+                            }}
+                          >
+                            <CloseRoundedIcon sx={{ fontSize: 12 }} />
+                          </IconButton>
+                        </Tooltip>
+                      </Stack>
+                    )}
+                  </Box>
+                );
+              })}
 
-              return (
+              {/* Admin "+ Add Category" Pill */}
+              {isAdminOrStaff && (
                 <Box
-                  key={food._id}
+                  onClick={() => setAddCategoryOpen(true)}
                   sx={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 0.8,
+                    height: 40,
+                    pl: 0.8,
+                    pr: 1.8,
+                    borderRadius: "9999px",
+                    cursor: "pointer",
                     backgroundColor: "#ffffff",
-                    borderRadius: "20px",
-                    p: 1.6,
-                    border: !isAdminOrStaff && isInCart ? "2px solid #22c55e" : "1px solid #f1f5f9",
-                    boxShadow: !isAdminOrStaff && isInCart
-                      ? "0 8px 24px rgba(34, 197, 94, 0.12)"
-                      : "0 2px 12px rgba(0,0,0,0.03)",
-                    display: "flex",
-                    flexDirection: "column",
-                    position: "relative",
-                    transition: "all 0.2s ease",
+                    border: "1.5px dashed #cbd5e1",
+                    color: "#64748b",
+                    transition: "all 0.18s ease",
+                    userSelect: "none",
+                    flexShrink: 0,
                     "&:hover": {
-                      boxShadow: "0 8px 26px rgba(0,0,0,0.07)",
-                      transform: "translateY(-2px)",
+                      transform: "translateY(-1px)",
+                      borderColor: "#2563eb",
+                      color: "#2563eb",
+                      backgroundColor: "#eff6ff",
                     },
                   }}
                 >
-                  {/* Top Image Container */}
                   <Box
                     sx={{
-                      position: "relative",
-                      width: "100%",
-                      height: 160,
-                      borderRadius: "14px",
-                      overflow: "hidden",
-                      mb: 1.4,
-                      backgroundColor: "#f8fafc",
+                      width: 26,
+                      height: 26,
+                      borderRadius: "50%",
+                      backgroundColor: "#f1f5f9",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "inherit",
                     }}
                   >
-                    {/* Discount Tag (Top-Left) */}
-                    {Number(food.offer || 0) > 0 && (
+                    <AddRoundedIcon sx={{ fontSize: 16 }} />
+                  </Box>
+                  <Typography
+                    sx={{
+                      fontWeight: 600,
+                      fontSize: "0.84rem",
+                      lineHeight: 1,
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Add Category
+                  </Typography>
+                </Box>
+              )}
+            </Box>
+
+            {/* Right Navigation Chevron Button (flex-end) */}
+            <IconButton
+              size="small"
+              onClick={() => categoryScrollRef.current?.scrollBy({ left: 220, behavior: "smooth" })}
+              sx={{
+                flexShrink: 0,
+                width: 34,
+                height: 34,
+                backgroundColor: "#ffffff",
+                border: "1px solid #e2e8f0",
+                color: "#64748b",
+                borderRadius: "10px",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                "&:hover": { backgroundColor: "#f8fafc", color: "#0f172a", borderColor: "#cbd5e1" },
+                display: { xs: "none", sm: "flex" },
+              }}
+            >
+              <ChevronRightRoundedIcon fontSize="small" />
+            </IconButton>
+          </Box>
+        </Box>
+
+        {/* SCROLLABLE ITEMS CONTAINER: Only this item grid scrolls */}
+        <Box
+          sx={{
+            flex: 1,
+            minHeight: 0,
+            overflowY: "auto",
+            pr: { xs: 0.5, sm: 1 },
+            pt: 0.5,
+            pb: 3,
+            "&::-webkit-scrollbar": { width: "6px" },
+            "&::-webkit-scrollbar-track": { background: "transparent" },
+            "&::-webkit-scrollbar-thumb": {
+              backgroundColor: "#cbd5e1",
+              borderRadius: "4px",
+            },
+            "&::-webkit-scrollbar-thumb:hover": {
+              backgroundColor: "#94a3b8",
+            },
+          }}
+        >
+          {/* 3. Food Products Grid (Responsive auto-fill prevents card stretching on cart collapse) */}
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: {
+                xs: "repeat(auto-fill, minmax(180px, 1fr))",
+                sm: "repeat(auto-fill, minmax(210px, 1fr))",
+                md: "repeat(auto-fill, minmax(230px, 1fr))",
+                lg: "repeat(auto-fill, minmax(240px, 1fr))",
+              },
+              gap: 2,
+              alignItems: "start",
+              alignContent: "start",
+              mb: 2,
+            }}
+          >
+            {loadingFoods ? (
+              Array.from({ length: 8 }).map((_, idx) => (
+                <Box
+                  key={idx}
+                  sx={{
+                    backgroundColor: "#ffffff",
+                    borderRadius: "14px",
+                    p: 1.5,
+                    border: "1px solid #e2e8f0",
+                  }}
+                >
+                  <Skeleton variant="rounded" width="100%" height={145} sx={{ borderRadius: "10px", mb: 1.2 }} />
+                  <Skeleton variant="text" width="75%" height={22} />
+                  <Skeleton variant="text" width="40%" height={18} sx={{ mb: 1 }} />
+                  <Skeleton variant="rounded" width="100%" height={38} sx={{ borderRadius: "10px" }} />
+                </Box>
+              ))
+            ) : filteredFoods.length === 0 ? (
+              <Box sx={{ gridColumn: "1 / -1", textAlign: "center", py: 8 }}>
+                <Typography sx={{ fontSize: "1.1rem", fontWeight: 700, color: "#0f172a", mb: 1 }}>
+                  No dishes found
+                </Typography>
+                <Typography sx={{ color: "#94a3b8", fontSize: "0.88rem" }}>
+                  Try adjusting your search or resetting active filters.
+                </Typography>
+                {hasActiveFilters && (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={handleResetFilters}
+                    sx={{ mt: 2, textTransform: "none", borderRadius: "10px", borderColor: "#e2e8f0", color: "#2563eb" }}
+                  >
+                    Reset Filters
+                  </Button>
+                )}
+              </Box>
+            ) : (
+              filteredFoods.map((food) => {
+                const qtyInCart = getItemCartQty(food._id);
+                const isInCart = qtyInCart > 0;
+                const isVeg = checkIsVeg(food);
+                const imageUrl = food.image || getFallbackImage(food.itemname);
+                const stock = Number(food.stock || 0);
+
+                let avg = 0;
+                let totalCount = 0;
+                if (Array.isArray(food.ratings) && food.ratings.length > 0) {
+                  const sum = food.ratings.reduce((s, r) => s + (Number(r.rating) || 0), 0);
+                  avg = sum / food.ratings.length;
+                  totalCount = food.ratings.length;
+                } else if (typeof food.averageRating === "number" && food.averageRating > 0 && typeof food.totalRatings === "number" && food.totalRatings > 0) {
+                  avg = food.averageRating;
+                  totalCount = food.totalRatings;
+                }
+                const foodAvgRating = totalCount > 0 && avg > 0 ? (Math.round(avg * 10) / 10).toFixed(1) : null;
+                const foodTotalRatings = totalCount;
+
+                const myRatingObj = Array.isArray(food.ratings)
+                  ? food.ratings.find(
+                      (r) =>
+                        r.user &&
+                        (String(r.user._id || r.user) === String(user?._id) ||
+                          (user?.username && String(r.user?.username || "").toLowerCase() === String(user?.username).toLowerCase()))
+                    )
+                  : null;
+                const myRating = myRatingObj ? Number(myRatingObj.rating) : 0;
+
+                const origPrice = food.originalPrice && food.originalPrice > food.price 
+                  ? food.originalPrice 
+                  : (food.offer > 0 ? Math.round(food.price / (1 - food.offer / 100)) : 0);
+
+                return (
+                  <Box
+                    key={food._id}
+                    sx={{
+                      backgroundColor: "#ffffff",
+                      borderRadius: "14px",
+                      p: 1.5,
+                      border: !isAdminOrStaff && isInCart ? "1.5px solid #2563eb" : "1px solid #e2e8f0",
+                      boxShadow: !isAdminOrStaff && isInCart
+                        ? "0 4px 14px rgba(37, 99, 235, 0.12)"
+                        : "0 1px 3px rgba(0,0,0,0.03)",
+                      display: "flex",
+                      flexDirection: "column",
+                      position: "relative",
+                      transition: "all 0.2s ease",
+                      "&:hover": {
+                        boxShadow: "0 6px 18px rgba(0,0,0,0.06)",
+                        borderColor: !isAdminOrStaff && isInCart ? "#2563eb" : "#cbd5e1",
+                        transform: "translateY(-2px)",
+                      },
+                    }}
+                  >
+                    {/* Top Image Container */}
+                    <Box
+                      sx={{
+                        position: "relative",
+                        width: "100%",
+                        height: 145,
+                        borderRadius: "10px",
+                        overflow: "hidden",
+                        mb: 1.2,
+                        backgroundColor: "#f8fafc",
+                      }}
+                    >
+                      {/* Discount Tag (Top-Left) */}
+                      {Number(food.offer || 0) > 0 && (
+                        <Box
+                          sx={{
+                            position: "absolute",
+                            top: 8,
+                            left: 8,
+                            backgroundColor: "#fef3c7",
+                            color: "#b45309",
+                            border: "1px solid #fde68a",
+                            fontWeight: 800,
+                            fontSize: "0.72rem",
+                            px: 1,
+                            py: 0.3,
+                            borderRadius: "6px",
+                            zIndex: 1,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 0.3,
+                            boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                          }}
+                        >
+                          <SellOutlinedIcon sx={{ fontSize: 13 }} />
+                          {Number(food.offer)}% OFF
+                        </Box>
+                      )}
+
+                      {/* Stock Pill Badge (Top-Right) */}
                       <Box
                         sx={{
                           position: "absolute",
-                          top: 10,
-                          left: 10,
-                          backgroundColor: "#fef08a",
-                          color: "#854d0e",
-                          fontWeight: 800,
-                          fontSize: "0.72rem",
-                          px: 1.1,
-                          py: 0.4,
+                          top: 8,
+                          right: 8,
+                          backgroundColor: stock > 0 ? "rgba(15, 23, 42, 0.72)" : "#ef4444",
+                          backdropFilter: "blur(4px)",
+                          color: "#ffffff",
+                          fontWeight: 700,
+                          fontSize: "0.7rem",
+                          px: 1,
+                          py: 0.3,
                           borderRadius: "100px",
                           zIndex: 1,
                           display: "flex",
                           alignItems: "center",
-                          gap: 0.4,
-                          boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
+                          gap: 0.3,
                         }}
                       >
-                        <SellOutlinedIcon sx={{ fontSize: 13 }} />
-                        {Number(food.offer)}% OFF
+                        <Inventory2OutlinedIcon sx={{ fontSize: 12 }} />
+                        {stock > 0 ? `${stock} left` : "Out of stock"}
                       </Box>
-                    )}
 
-                    {/* Stock Pill Badge (Top-Right) */}
-                    <Box
-                      sx={{
-                        position: "absolute",
-                        top: 10,
-                        right: 10,
-                        backgroundColor: stock > 0 ? "rgba(15, 23, 42, 0.72)" : "#b91c1c",
-                        backdropFilter: "blur(4px)",
-                        color: "#ffffff",
-                        fontWeight: 700,
-                        fontSize: "0.72rem",
-                        px: 1.1,
-                        py: 0.4,
-                        borderRadius: "100px",
-                        zIndex: 1,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 0.4,
-                      }}
-                    >
-                      <Inventory2OutlinedIcon sx={{ fontSize: 13 }} />
-                      {stock > 0 ? `${stock} left` : "Out of stock"}
-                    </Box>
-
-                    {/* Food Image */}
-                    <Box
-                      component="img"
-                      src={imageUrl}
-                      alt={food.itemname}
-                      sx={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                        display: "block",
-                      }}
-                    />
-                  </Box>
-
-                  {/* Food Content */}
-                  <Box sx={{ mb: 1.4, flex: 1, display: "flex", flexDirection: "column" }}>
-                    {/* Row 1: Name on Left, Category + Restaurant Veg/Non-Veg icon TOGETHER on Right */}
-                    <Box
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        mb: 0.8,
-                      }}
-                    >
-                      <Typography
-                        sx={{
-                          fontWeight: 800,
-                          fontSize: "1.08rem",
-                          color: "#0f172a",
-                          lineHeight: 1.25,
-                          textTransform: "capitalize",
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          pr: 1,
-                        }}
-                      >
-                        {food.itemname}
-                      </Typography>
-
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 0.8, flexShrink: 0 }}>
-                        <Box
-                          sx={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            px: 1,
-                            py: 0.3,
-                            borderRadius: "100px",
-                            backgroundColor: "#f1f5f9",
-                            color: "#475569",
-                            fontSize: "0.72rem",
-                            fontWeight: 700,
-                            textTransform: "capitalize",
-                          }}
-                        >
-                          {food.category || "General"}
-                        </Box>
-                        <RestaurantVegIcon isVeg={isVeg} size={16} />
-                      </Box>
-                    </Box>
-
-                    {/* Row 2: Stars (Left) & Average Rating (Right) — Same layout for all users */}
-                    <Box
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        py: 0.2,
-                        mb: 0.8,
-                        minHeight: 28,
-                      }}
-                    >
-                      {/* Left: Read-only avg stars for Admin/Staff; Interactive stars for Students */}
-                      {isAdminOrStaff ? (
-                        <Tooltip
-                          title={
-                            foodTotalRatings > 0
-                              ? `Average: ${foodAvgRating} ★ (${foodTotalRatings} reviews)`
-                              : "No ratings yet"
-                          }
-                          arrow
-                          placement="top"
-                        >
-                          <Box sx={{ display: "inline-flex", alignItems: "center" }}>
-                            <Rating
-                              name={`avg-food-${food._id}`}
-                              value={foodAvgRating ? Number(foodAvgRating) : 0}
-                              precision={0.5}
-                              readOnly
-                              size="small"
-                              sx={{
-                                color: "#f59e0b",
-                                fontSize: "1.15rem",
-                                "& .MuiRating-iconEmpty": { color: "#cbd5e1" },
-                              }}
-                            />
-                          </Box>
-                        </Tooltip>
-                      ) : (
-                        <Tooltip
-                          title={myRating > 0 ? `Your rating: ${myRating} ★ (Click to change)` : "Click a star to rate"}
-                          arrow
-                          placement="top"
-                        >
-                          <Box sx={{ display: "inline-flex", alignItems: "center" }}>
-                            <Rating
-                              name={`rate-food-${food._id}`}
-                              value={myRating}
-                              precision={1}
-                              onChange={(e, val) => handleDirectRate(food, val, e)}
-                              size="small"
-                              sx={{
-                                color: "#f59e0b",
-                                fontSize: "1.15rem",
-                                "& .MuiRating-iconEmpty": { color: "#cbd5e1" },
-                              }}
-                            />
-                          </Box>
-                        </Tooltip>
-                      )}
-
-                      {/* Right: Average rating chip — same for all users */}
+                      {/* Food Image */}
                       <Box
-                        onClick={(e) => !isAdminOrStaff && openRatingDialog(food, e)}
+                        component="img"
+                        src={imageUrl}
+                        alt={food.itemname}
                         sx={{
-                          cursor: isAdminOrStaff ? "default" : "pointer",
-                          display: "inline-flex",
-                          alignItems: "center",
-                          px: 0.6,
-                          py: 0.2,
-                          borderRadius: "6px",
-                          transition: "background-color 0.15s ease",
-                          "&:hover": { backgroundColor: isAdminOrStaff ? "transparent" : "#f1f5f9" },
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                          display: "block",
                         }}
-                      >
-                        {foodTotalRatings > 0 ? (
-                          <Typography
-                            sx={{
-                              fontSize: "0.82rem",
-                              fontWeight: 700,
-                              color: "#1e293b",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 0.3,
-                            }}
-                          >
-                            <StarRoundedIcon sx={{ color: "#f59e0b", fontSize: 16 }} />
-                            {foodAvgRating}
-                            <Box component="span" sx={{ color: "#64748b", fontWeight: 500, fontSize: "0.74rem" }}>
-                              ({foodTotalRatings})
-                            </Box>
-                          </Typography>
-                        ) : (
-                          <Typography sx={{ fontSize: "0.76rem", fontWeight: 600, color: "#94a3b8" }}>
-                            No ratings yet
-                          </Typography>
-                        )}
-                      </Box>
+                      />
                     </Box>
 
-                    {/* Row 3: Price (Current Price large + Original Price crossed out) */}
-                    <Box sx={{ display: "flex", alignItems: "baseline", gap: 1, mt: "auto" }}>
-                      <Typography sx={{ fontWeight: 900, fontSize: "1.32rem", color: "#0f172a" }}>
-                        ₹{Number(food.price || 0).toFixed(0)}
-                      </Typography>
-                      {origPrice > food.price && (
-                        <Typography
-                          sx={{
-                            fontWeight: 600,
-                            fontSize: "0.95rem",
-                            color: "#94a3b8",
-                            textDecoration: "line-through",
-                          }}
-                        >
-                          ₹{Number(origPrice).toFixed(0)}
-                        </Typography>
-                      )}
-                    </Box>
-                  </Box>
-
-                  {/* Bottom Actions — Different per role, SAME card height & structure */}
-                  {isAdminOrStaff ? (
-                    /* ADMIN / STAFF: Edit + Stock toggle + Delete */
-                    <Box
-                      sx={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(3, 1fr)",
-                        gap: 1,
-                        mt: 0,
-                      }}
-                    >
-                      <Tooltip title="Edit Dish" arrow>
-                        <IconButton
-                          size="small"
-                          onClick={() => openEditDialog(food)}
-                          sx={{
-                            width: "100%",
-                            height: 38,
-                            backgroundColor: "#ecfdf5",
-                            color: "#047857",
-                            border: "1px solid #a7f3d0",
-                            borderRadius: "12px",
-                            "&:hover": { backgroundColor: "#d1fae5" },
-                          }}
-                        >
-                          <EditRoundedIcon sx={{ fontSize: 19 }} />
-                        </IconButton>
-                      </Tooltip>
-
-                      <Tooltip title={stock > 0 ? "Mark as Out of Stock" : "Restock (25 items)"} arrow>
-                        <IconButton
-                          size="small"
-                          onClick={() => handleToggleStock(food)}
-                          sx={{
-                            width: "100%",
-                            height: 38,
-                            backgroundColor: stock > 0 ? "#fff7ed" : "#eff6ff",
-                            color: stock > 0 ? "#ea580c" : "#2563eb",
-                            border: stock > 0 ? "1px solid #fed7aa" : "1px solid #bfdbfe",
-                            borderRadius: "12px",
-                            "&:hover": {
-                              backgroundColor: stock > 0 ? "#ffedd5" : "#dbeafe",
-                            },
-                          }}
-                        >
-                          {stock > 0 ? (
-                            <RemoveShoppingCartRoundedIcon sx={{ fontSize: 19 }} />
-                          ) : (
-                            <AddShoppingCartRoundedIcon sx={{ fontSize: 19 }} />
-                          )}
-                        </IconButton>
-                      </Tooltip>
-
-                      <Tooltip title="Delete Dish" arrow>
-                        <IconButton
-                          size="small"
-                          onClick={() => openDeleteDialog(food)}
-                          sx={{
-                            width: "100%",
-                            height: 38,
-                            backgroundColor: "#fef2f2",
-                            color: "#ef4444",
-                            border: "1px solid #fee2e2",
-                            borderRadius: "12px",
-                            "&:hover": { backgroundColor: "#fee2e2" },
-                          }}
-                        >
-                          <DeleteOutlineRoundedIcon sx={{ fontSize: 19 }} />
-                        </IconButton>
-                      </Tooltip>
-                    </Box>
-                  ) : (
-                    /* STUDENT: Add to cart button (icon only) or qty stepper */
-                    !isInCart ? (
-                      <Tooltip title={stock > 0 ? "Add to cart" : "Out of stock"} arrow>
-                        <span style={{ width: "100%" }}>
-                          <IconButton
-                            onClick={() => handleAddToDish(food)}
-                            disabled={stock <= 0}
-                            sx={{
-                              width: "100%",
-                              height: 40,
-                              backgroundColor: stock > 0 ? "#c2410c" : "#94a3b8",
-                              color: "#ffffff",
-                              borderRadius: "12px",
-                              boxShadow: stock > 0 ? "0 2px 8px rgba(194,65,12,0.22)" : "none",
-                              "&:hover": {
-                                backgroundColor: stock > 0 ? "#9a3412" : "#94a3b8",
-                                boxShadow: stock > 0 ? "0 4px 12px rgba(194,65,12,0.32)" : "none",
-                              },
-                              "&.Mui-disabled": {
-                                backgroundColor: "#94a3b8",
-                                color: "#e2e8f0",
-                              },
-                            }}
-                          >
-                          <AddShoppingCartRoundedIcon sx={{ fontSize: 20 }} />
-                          </IconButton>
-                        </span>
-                      </Tooltip>
-                    ) : (
+                    {/* Food Content */}
+                    <Box sx={{ mb: 1, flex: 1, display: "flex", flexDirection: "column" }}>
+                      {/* Row 1: Name on Left, Category + Restaurant Veg/Non-Veg icon TOGETHER on Right */}
                       <Box
                         sx={{
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "space-between",
-                          height: 40,
-                          backgroundColor: "#f0fdf4",
-                          border: "1px solid #bbf7d0",
-                          borderRadius: "12px",
-                          px: 1,
+                          mb: 0.6,
                         }}
                       >
-                        <IconButton
-                          size="small"
-                          onClick={() => handleUpdateQty(food._id, -1)}
+                        <Typography
                           sx={{
-                            backgroundColor: "#22c55e",
-                            color: "#ffffff",
-                            width: 28,
-                            height: 28,
-                            "&:hover": { backgroundColor: "#16a34a" },
+                            fontWeight: 700,
+                            fontSize: "1.02rem",
+                            color: "#0f172a",
+                            lineHeight: 1.25,
+                            textTransform: "capitalize",
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            pr: 1,
                           }}
                         >
-                          <RemoveRoundedIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
-
-                        <Typography sx={{ fontWeight: 800, fontSize: "0.98rem", color: "#0f172a" }}>
-                          {qtyInCart}
+                          {food.itemname}
                         </Typography>
 
-                        <IconButton
-                          size="small"
-                          onClick={() => handleUpdateQty(food._id, 1)}
-                          disabled={qtyInCart >= stock}
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 0.6, flexShrink: 0 }}>
+                          <Box
+                            sx={{
+                              display: "inline-flex",
+                              alignItems: "center",
+                              px: 0.8,
+                              py: 0.2,
+                              borderRadius: "6px",
+                              backgroundColor: "#f1f5f9",
+                              color: "#475569",
+                              fontSize: "0.7rem",
+                              fontWeight: 600,
+                              textTransform: "capitalize",
+                              border: "1px solid #e2e8f0",
+                            }}
+                          >
+                            {food.category || "General"}
+                          </Box>
+                          <RestaurantVegIcon isVeg={isVeg} size={15} />
+                        </Box>
+                      </Box>
+
+                      {/* Row 2: Stars (Left) & Average Rating (Right) */}
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          py: 0.2,
+                          mb: 0.6,
+                          minHeight: 26,
+                        }}
+                      >
+                        {/* Left: Read-only avg stars for Admin/Staff; Interactive stars for Students */}
+                        {isAdminOrStaff ? (
+                          <Tooltip
+                            title={
+                              foodTotalRatings > 0
+                                ? `Average: ${foodAvgRating} ★ (${foodTotalRatings} reviews)`
+                                : "No ratings yet"
+                            }
+                            arrow
+                            placement="top"
+                          >
+                            <Box sx={{ display: "inline-flex", alignItems: "center" }}>
+                              <Rating
+                                name={`avg-food-${food._id}`}
+                                value={foodAvgRating ? Number(foodAvgRating) : 0}
+                                precision={0.5}
+                                readOnly
+                                size="small"
+                                sx={{
+                                  color: "#f59e0b",
+                                  fontSize: "1.1rem",
+                                  "& .MuiRating-iconEmpty": { color: "#cbd5e1" },
+                                }}
+                              />
+                            </Box>
+                          </Tooltip>
+                        ) : (
+                          <Tooltip
+                            title={myRating > 0 ? `Your rating: ${myRating} ★ (Click to change)` : "Click a star to rate"}
+                            arrow
+                            placement="top"
+                          >
+                            <Box sx={{ display: "inline-flex", alignItems: "center" }}>
+                              <Rating
+                                name={`rate-food-${food._id}`}
+                                value={myRating}
+                                precision={1}
+                                onChange={(e, val) => handleDirectRate(food, val, e)}
+                                size="small"
+                                sx={{
+                                  color: "#f59e0b",
+                                  fontSize: "1.1rem",
+                                  "& .MuiRating-iconEmpty": { color: "#cbd5e1" },
+                                }}
+                              />
+                            </Box>
+                          </Tooltip>
+                        )}
+
+                        {/* Right: Average rating chip */}
+                        <Box
+                          onClick={(e) => !isAdminOrStaff && openRatingDialog(food, e)}
                           sx={{
-                            backgroundColor: "#22c55e",
-                            color: "#ffffff",
-                            width: 28,
-                            height: 28,
-                            "&:hover": { backgroundColor: "#16a34a" },
+                            cursor: isAdminOrStaff ? "default" : "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            px: 0.6,
+                            py: 0.2,
+                            borderRadius: "6px",
+                            transition: "background-color 0.15s ease",
+                            "&:hover": { backgroundColor: isAdminOrStaff ? "transparent" : "#f1f5f9" },
                           }}
                         >
-                          <AddRoundedIcon sx={{ fontSize: 16 }} />
-                        </IconButton>
+                          {foodTotalRatings > 0 ? (
+                            <Typography
+                              sx={{
+                                fontSize: "0.8rem",
+                                fontWeight: 700,
+                                color: "#1e293b",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 0.3,
+                              }}
+                            >
+                              <StarRoundedIcon sx={{ color: "#f59e0b", fontSize: 15 }} />
+                              {foodAvgRating}
+                              <Box component="span" sx={{ color: "#64748b", fontWeight: 500, fontSize: "0.72rem" }}>
+                                ({foodTotalRatings})
+                              </Box>
+                            </Typography>
+                          ) : (
+                            <Typography sx={{ fontSize: "0.74rem", fontWeight: 600, color: "#94a3b8" }}>
+                              No ratings
+                            </Typography>
+                          )}
+                        </Box>
                       </Box>
-                    )
-                  )}
-                </Box>
-              );
-            })
-          )}
+
+                      {/* Row 3: Price */}
+                      <Box sx={{ display: "flex", alignItems: "baseline", gap: 0.8, mt: "auto", pt: 0.4 ,justifyContent:"space-between" }}>
+                        <Typography sx={{ fontWeight: 800, fontSize: "1.25rem", color: "#0f172a" }}>
+                          ₹{Number(food.price || 0).toFixed(0)}
+                        </Typography>
+                        {origPrice > food.price && (
+                          <Typography
+                            sx={{
+                              fontWeight: 500,
+                              fontSize: "0.88rem",
+                              color: "#94a3b8",
+                              textDecoration: "line-through",
+                            }}
+                          >
+                            ₹{Number(origPrice).toFixed(0)}
+                          </Typography>
+                        )}
+                      </Box>
+                    </Box>
+
+                    {/* Bottom Actions — Different per role, SAME card height & structure */}
+                    {isAdminOrStaff ? (
+                      /* ADMIN / STAFF: Edit + Stock toggle + Delete */
+                      <Box
+                        sx={{
+                          display: "grid",
+                          gridTemplateColumns: "repeat(3, 1fr)",
+                          gap: 1,
+                          mt: 0,
+                        }}
+                      >
+                        <Tooltip title="Edit Dish" arrow>
+                          <IconButton
+                            size="small"
+                            onClick={() => openEditDialog(food)}
+                            sx={{
+                              width: "100%",
+                              height: 36,
+                              backgroundColor: "#eff6ff",
+                              color: "#2563eb",
+                              border: "1px solid #bfdbfe",
+                              borderRadius: "10px",
+                              "&:hover": { backgroundColor: "#dbeafe" },
+                            }}
+                          >
+                            <EditRoundedIcon sx={{ fontSize: 18 }} />
+                          </IconButton>
+                        </Tooltip>
+
+                        <Tooltip title={stock > 0 ? "Mark as Out of Stock" : "Restock (25 items)"} arrow>
+                          <IconButton
+                            size="small"
+                            onClick={() => handleToggleStock(food)}
+                            sx={{
+                              width: "100%",
+                              height: 36,
+                              backgroundColor: stock > 0 ? "#fff7ed" : "#eff6ff",
+                              color: stock > 0 ? "#ea580c" : "#2563eb",
+                              border: stock > 0 ? "1px solid #fed7aa" : "1px solid #bfdbfe",
+                              borderRadius: "10px",
+                              "&:hover": {
+                                backgroundColor: stock > 0 ? "#ffedd5" : "#dbeafe",
+                              },
+                            }}
+                          >
+                            {stock > 0 ? (
+                              <RemoveShoppingCartRoundedIcon sx={{ fontSize: 18 }} />
+                            ) : (
+                              <AddShoppingCartRoundedIcon sx={{ fontSize: 18 }} />
+                            )}
+                          </IconButton>
+                        </Tooltip>
+
+                        <Tooltip title="Delete Dish" arrow>
+                          <IconButton
+                            size="small"
+                            onClick={() => openDeleteDialog(food)}
+                            sx={{
+                              width: "100%",
+                              height: 36,
+                              backgroundColor: "#fef2f2",
+                              color: "#ef4444",
+                              border: "1px solid #fee2e2",
+                              borderRadius: "10px",
+                              "&:hover": { backgroundColor: "#fee2e2" },
+                            }}
+                          >
+                            <DeleteOutlineRoundedIcon sx={{ fontSize: 18 }} />
+                          </IconButton>
+                        </Tooltip>
+                      </Box>
+                    ) : (
+                      /* STUDENT: Add to cart button or qty stepper */
+                      !isInCart ? (
+                        <Tooltip title={stock > 0 ? "Add to cart" : "Out of stock"} arrow>
+                          <span style={{ width: "100%" }}>
+                            <IconButton
+                              onClick={() => handleAddToDish(food)}
+                              disabled={stock <= 0}
+                              sx={{
+                                width: "100%",
+                                height: 38,
+                                backgroundColor: stock > 0 ? "#2563eb" : "#94a3b8",
+                                color: "#ffffff",
+                                borderRadius: "10px",
+                                boxShadow: stock > 0 ? "0 2px 6px rgba(37,99,235,0.22)" : "none",
+                                "&:hover": {
+                                  backgroundColor: stock > 0 ? "#1d4ed8" : "#94a3b8",
+                                  boxShadow: stock > 0 ? "0 4px 12px rgba(37,99,235,0.32)" : "none",
+                                },
+                                "&.Mui-disabled": {
+                                  backgroundColor: "#94a3b8",
+                                  color: "#e2e8f0",
+                                },
+                              }}
+                            >
+                              <AddShoppingCartRoundedIcon sx={{ fontSize: 19 }} />
+                            </IconButton>
+                          </span>
+                        </Tooltip>
+                      ) : (
+                        <Box
+                          sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            height: 38,
+                            backgroundColor: "#eff6ff",
+                            border: "1px solid #bfdbfe",
+                            borderRadius: "10px",
+                            px: 1,
+                          }}
+                        >
+                          <IconButton
+                            size="small"
+                            onClick={() => handleUpdateQty(food._id, -1)}
+                            sx={{
+                              backgroundColor: "#2563eb",
+                              color: "#ffffff",
+                              width: 26,
+                              height: 26,
+                              borderRadius: "8px",
+                              "&:hover": { backgroundColor: "#1d4ed8" },
+                            }}
+                          >
+                            <RemoveRoundedIcon sx={{ fontSize: 15 }} />
+                          </IconButton>
+
+                          <Typography sx={{ fontWeight: 800, fontSize: "0.95rem", color: "#0f172a" }}>
+                            {qtyInCart}
+                          </Typography>
+
+                          <IconButton
+                            size="small"
+                            onClick={() => handleUpdateQty(food._id, 1)}
+                            disabled={qtyInCart >= stock}
+                            sx={{
+                              backgroundColor: "#2563eb",
+                              color: "#ffffff",
+                              width: 26,
+                              height: 26,
+                              borderRadius: "8px",
+                              "&:hover": { backgroundColor: "#1d4ed8" },
+                            }}
+                          >
+                            <AddRoundedIcon sx={{ fontSize: 15 }} />
+                          </IconButton>
+                        </Box>
+                      )
+                    )}
+                  </Box>
+                );
+              })
+            )}
+          </Box>
         </Box>
-
-
       </Box>
 
       {/* ============================================================ */}
@@ -2276,105 +2436,98 @@ export default function Menu() {
       {/* ============================================================ */}
       {!isAdminOrStaff && (
         <>
-          {/* Collapse / Expand toggle button — always visible */}
+       
+
+          {/* Cart Panel — sits directly against the menu catalog with NO gap */}
           <Box
             sx={{
-              position: "relative",
+              width: cartCollapsed ? 0 : { xs: "100%", md: 380, lg: 410 },
+              minWidth: cartCollapsed ? 0 : { xs: "100%", md: 380, lg: 410 },
+              overflow: "hidden",
+              transition: "width 0.3s cubic-bezier(0.4,0,0.2,1), min-width 0.3s cubic-bezier(0.4,0,0.2,1)",
+              backgroundColor: "#ffffff",
+              borderLeft: cartCollapsed ? "none" : "1px solid #e2e8f0",
               display: "flex",
-              alignItems: "stretch",
+              flexDirection: "column",
               height: "100%",
+              boxShadow: cartCollapsed ? "none" : "-4px 0 24px rgba(0,0,0,0.02)",
               flexShrink: 0,
-              width: cartCollapsed ? 28 : "auto",
-              transition: "width 0.3s cubic-bezier(0.4,0,0.2,1)",
+              boxSizing: "border-box",
             }}
           >
-            {/* Toggle tab — always pinned to left edge */}
-            <Tooltip title={cartCollapsed ? "Open Cart" : "Collapse Cart"} placement="left" arrow>
-              <Box
-                onClick={() => setCartCollapsed((p) => !p)}
-                sx={{
-                  position: "absolute",
-                  left: 0,
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  zIndex: 10,
-                  width: 28,
-                  height: 72,
-                  backgroundColor: "#ffffff",
-                  border: "1px solid #e2e8f0",
-                  borderRight: cartCollapsed ? "1px solid #e2e8f0" : "none",
-                  borderRadius: "12px 0 0 12px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  cursor: "pointer",
-                  boxShadow: "-2px 0 10px rgba(0,0,0,0.06)",
-                  "&:hover": { backgroundColor: "#f1f5f9" },
-                }}
-              >
-                {cartCollapsed ? (
-                  <ChevronLeftRoundedIcon sx={{ fontSize: 20, color: "#475569" }} />
-                ) : (
-                  <ChevronRightRoundedIcon sx={{ fontSize: 20, color: "#475569" }} />
-                )}
-              </Box>
-            </Tooltip>
-
-            {/* Cart Panel — slides in/out */}
             <Box
               sx={{
-                width: cartCollapsed ? 0 : { xs: "100%", md: 400, lg: 430 },
-                overflow: "hidden",
-                transition: "width 0.3s cubic-bezier(0.4,0,0.2,1)",
-                backgroundColor: "#ffffff",
-                borderLeft: "1px solid #e2e8f0",
+                p: { xs: 1.8, sm: 2 },
                 display: "flex",
                 flexDirection: "column",
                 height: "100%",
-                boxShadow: "-4px 0 24px rgba(0,0,0,0.02)",
-                flexShrink: 0,
+                width: { xs: "100%", md: 380, lg: 410 },
                 boxSizing: "border-box",
-                ml: "28px",
               }}
             >
-            <Box sx={{ p: { xs: 2, sm: 2.5 }, display: "flex", flexDirection: "column", height: "100%", minWidth: { xs: "100%", md: 400, lg: 430 }, boxSizing: "border-box" }}>
-          {/* Table Header & Switcher Icon */}
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              pb: 2,
-              borderBottom: "1px solid #f1f5f9",
-              flexShrink: 0,
-            }}
-          >
-            <Box>
-              <Typography sx={{ fontWeight: 800, fontSize: "1.25rem", color: "#0f172a" }}>
-                {activeTable ? activeTable.tableName : (user?.rollNo ? ` ${user.rollNo.toUpperCase()}` : "Create Collaborative Table")}
-              </Typography>
-              <Typography sx={{ fontWeight: 600, fontSize: "0.82rem", color: "#64748b" }}>
-                {activeTable ? `Host: ${activeTable.creatorName}` : (user?.name ? `${user.name} (${user?.rollNo || user?.username})` : "Host: You ")}
-              </Typography>
-            </Box>
-
-            <Tooltip title={activeTable ? "Table Options / Switch Table" : "Create or Join Table"}>
-              <IconButton
-                onClick={() => setTableModalOpen(true)}
+              {/* Table Header & Actions (Table Switcher + Collapse Button inside Cart at top like sidebar) */}
+              <Box
                 sx={{
-                  backgroundColor: "#f8fafc",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "12px",
-                  width: 42,
-                  height: 42,
-                  color: "#0f172a",
-                  "&:hover": { backgroundColor: "#e2e8f0" },
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  pb: 1.8,
+                  borderBottom: "1px solid #f1f5f9",
+                  flexShrink: 0,
                 }}
               >
-                <EditRoundedIcon sx={{ fontSize: 20 }} />
-              </IconButton>
-            </Tooltip>
-          </Box>
+                <Box sx={{ minWidth: 0, pr: 1 }}>
+                  <Typography
+                    sx={{
+                      fontWeight: 800,
+                      fontSize: "1.18rem",
+                      color: "#0f172a",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {activeTable ? activeTable.tableName : (user?.rollNo ? ` ${user.rollNo.toUpperCase()}` : "Collaborative Table")}
+                  </Typography>
+                </Box>
+
+                <Stack direction="row" spacing={0.8} alignItems="center" sx={{ flexShrink: 0 }}>
+                  <Tooltip title={activeTable ? "Table Options / Switch Table" : "Create or Join Table"} arrow>
+                    <IconButton
+                      onClick={() => setTableModalOpen(true)}
+                      sx={{
+                        backgroundColor: "#f8fafc",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "10px",
+                        width: 38,
+                        height: 38,
+                        color: "#0f172a",
+                        "&:hover": { backgroundColor: "#e2e8f0" },
+                      }}
+                    >
+                      <EditRoundedIcon sx={{ fontSize: 18 }} />
+                    </IconButton>
+                  </Tooltip>
+
+                  {/* Sidebar Collapse Button — inside the cart at top */}
+                  <Tooltip title="Collapse Cart" arrow>
+                    <IconButton
+                      onClick={() => setCartCollapsed(true)}
+                      sx={{
+                        backgroundColor: "#f8fafc",
+                        border: "1px solid #e2e8f0",
+                        borderRadius: "10px",
+                        width: 38,
+                        height: 38,
+                        color: "#64748b",
+                        "&:hover": { backgroundColor: "#fee2e2", color: "#ef4444", borderColor: "#fecaca" },
+                      }}
+                    >
+                      <ChevronRightRoundedIcon sx={{ fontSize: 22 }} />
+                    </IconButton>
+                  </Tooltip>
+                </Stack>
+              </Box>
 
           {/* Active Members Status Badge */}
           {activeTable && (
@@ -2398,7 +2551,9 @@ export default function Menu() {
                     {activeTable.members.length} {activeTable.members.length === 1 ? "Person" : "People"} at Table ({activeTable.tableId})
                   </Typography>
                   <Typography sx={{ fontSize: "0.72rem", color: "#166534" }}>
-                    {readyCount}/{activeTable.members.length-1} Ready to Order
+                    {joinedMembersList.length === 0
+                      ? "Solo session • Ready to order"
+                      : `${readyJoinedCount}/${joinedMembersList.length} Ready to Order`}
                   </Typography>
                 </Box>
               </Box>
@@ -2420,59 +2575,16 @@ export default function Menu() {
           )}
 
           {/* Order Type Switcher (Order Now vs Pre-Order) */}
-          <Box sx={{ my: 1.5, flexShrink: 0 }}>
+          <Box sx={{ flexShrink: 0 }}>
             {isJoinedMember ? (
-              /* Joined Member View: Strictly Read-Only Status Indicator (Joined users cannot change order status) */
-              <Box
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  backgroundColor: effectiveOrderMode === "pre" ? "#eff6ff" : "#ecfdf5",
-                  border: effectiveOrderMode === "pre" ? "1.5px solid #93c5fd" : "1.5px solid #a7f3d0",
-                  borderRadius: "12px",
-                  py: 1,
-                  px: 1.5,
-                }}
-              >
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                  <Box
-                    sx={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: "50%",
-                      backgroundColor: effectiveOrderMode === "pre" ? "#2563eb" : "#059669",
-                    }}
-                  />
-                  <Typography sx={{ fontSize: "0.84rem", fontWeight: 700, color: "#0f172a" }}>
-                    Order Type:{" "}
-                    <span style={{ color: effectiveOrderMode === "pre" ? "#2563eb" : "#059669", fontWeight: 800 }}>
-                      {effectiveOrderMode === "pre" ? "Pre-Order" : "Order Now"}
-                    </span>
-                  </Typography>
-                </Box>
-                <Typography
-                  sx={{
-                    fontSize: "0.72rem",
-                    fontWeight: 700,
-                    color: "#64748b",
-                    backgroundColor: "#ffffff",
-                    px: 1,
-                    py: 0.2,
-                    borderRadius: "6px",
-                    border: "1px solid #e2e8f0",
-                  }}
-                >
-                  🔒 Set by Host
-                </Typography>
-              </Box>
+              <></>
             ) : (
               /* Creator or Solo User View: Interactive Switcher */
               <Box
                 sx={{
                   display: "flex",
                   backgroundColor: "#f1f5f9",
-                  borderRadius: "14px",
+                  borderRadius: "12px",
                   p: 0.5,
                 }}
               >
@@ -2500,17 +2612,18 @@ export default function Menu() {
                       sx={{
                         flex: 1,
                         textAlign: "center",
-                        py: 1,
-                        borderRadius: "10px",
+                        py: 0.9,
+                        borderRadius: "8px",
                         cursor: "pointer",
                         fontWeight: 700,
-                        fontSize: "0.86rem",
-                        backgroundColor: isSelected ? "#dcfce7" : "transparent",
-                        color: isSelected ? "#059669" : "#64748b",
+                        fontSize: "0.85rem",
+                        backgroundColor: isSelected ? "#ffffff" : "transparent",
+                        color: isSelected ? "#2563eb" : "#64748b",
+                        boxShadow: isSelected ? "0 1px 3px rgba(0,0,0,0.06)" : "none",
                         transition: "all 0.15s ease",
                         userSelect: "none",
                         "&:hover": {
-                          backgroundColor: isSelected ? "#dcfce7" : "#e2e8f0",
+                          color: isSelected ? "#2563eb" : "#0f172a",
                         },
                       }}
                     >
@@ -2533,7 +2646,7 @@ export default function Menu() {
               "&::-webkit-scrollbar-thumb": { backgroundColor: "#e2e8f0", borderRadius: "4px" },
             }}
           >
-            {cartItems.length === 0 ? (
+            {cartItems.length === 0 && (!activeTable || tableActiveUsers.length === 0) ? (
               <Box sx={{ textAlign: "center", py: 8 }}>
                 <Typography sx={{ color: "#0f172a", fontWeight: 700, fontSize: "0.95rem", mb: 0.5 }}>
                   Your order is empty
@@ -2542,13 +2655,328 @@ export default function Menu() {
                   Select items from the menu to build your table order.
                 </Typography>
               </Box>
-            ) : (
+            ) : activeTable ? (
+              /* Collaborative Table: Show USNs and Name of active users one below the other with Accordion */
               <Stack spacing={1.5}>
+                {tableActiveUsers.map((member) => {
+                  const mUser = String(member.username || "").toLowerCase();
+                  const mName = member.name || member.username;
+                  const isHost = mUser === String(activeTable.creator || "").toLowerCase();
+                  const isSelf = mUser === String(currentUsername || "").toLowerCase();
+
+                  // Items added by this active user
+                  const memberItems = (activeTable.items || []).filter(
+                    (it) => String(it.addedBy?.username || "").toLowerCase() === mUser
+                  );
+                  const itemCount = memberItems.reduce((acc, it) => acc + (it.quantity || 1), 0);
+                  const memberSubtotal = memberItems.reduce(
+                    (acc, it) => acc + (Number(it.price || 0) * (it.quantity || 1)),
+                    0
+                  );
+                  const hasItems = memberItems.length > 0;
+                  const readyStatus = isMemberReady(member);
+
+                  // Accordion expanded state: open by default if user has items or is self or host
+                  const isExpanded =
+                    expandedUsers[mUser] !== undefined ? expandedUsers[mUser] : true;
+
+                  return (
+                    <Box
+                      key={mUser}
+                      sx={{
+                        borderRadius: "16px",
+                        border: "1.5px solid #e2e8f0",
+                        backgroundColor: "#ffffff",
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
+                        overflow: "hidden",
+                        transition: "all 0.2s ease",
+                      }}
+                    >
+                      {/* Active User Accordion Header */}
+                      <Box
+                        onClick={() => toggleUserAccordion(mUser)}
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          p: 1.3,
+                          backgroundColor: isExpanded ? "#f8fafc" : "#ffffff",
+                          cursor: "pointer",
+                          userSelect: "none",
+                          transition: "background-color 0.15s ease",
+                          "&:hover": {
+                            backgroundColor: "#f1f5f9",
+                          },
+                        }}
+                      >
+                        {/* Left: Avatar + USN / Name */}
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1.2, minWidth: 0 }}>
+                          {(() => {
+                            const mAvatar =
+                              member.avatar ||
+                              (isSelf && user?.avatar ? user.avatar : "") ||
+                              (isHost && activeTable?.creatorAvatar ? activeTable.creatorAvatar : "") ||
+                              "";
+
+                            return (
+                              <Avatar
+                                src={mAvatar || undefined}
+                                alt={mName || mUser}
+                                sx={{
+                                  width: 38,
+                                  height: 38,
+                                  bgcolor: mAvatar ? "transparent" : isHost ? "#059669" : "#2563eb",
+                                  fontSize: "0.82rem",
+                                  fontWeight: 800,
+                                  flexShrink: 0,
+                                  border: mAvatar ? "1.5px solid #e2e8f0" : "none",
+                                  boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+                                  "& img": {
+                                    objectFit: "cover",
+                                  },
+                                }}
+                              >
+                                {!mAvatar && (
+                                  mName && isNaN(mName[0]) ? (
+                                    mName[0].toUpperCase()
+                                  ) : (
+                                    <PersonRoundedIcon sx={{ fontSize: 20, color: "#ffffff" }} />
+                                  )
+                                )}
+                              </Avatar>
+                            );
+                          })()}
+
+                          <Box sx={{ minWidth: 0 }}>
+                            <Box sx={{ display: "flex", alignItems: "center", gap: 0.6, flexWrap: "wrap" }}>
+                              <Typography
+                                sx={{
+                                  fontWeight: 800,
+                                  fontSize: "0.88rem",
+                                  color: "#0f172a",
+                                  whiteSpace: "nowrap",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                }}
+                              >
+                                {mName}
+                              </Typography>
+                              {isHost && (
+                                <Chip
+                                  label="Host"
+                                  size="small"
+                                  sx={{
+                                    height: 20,
+                                    fontSize: "0.66rem",
+                                    fontWeight: 800,
+                                    bgcolor: "#ecfdf5",
+                                    color: "#059669",
+                                    border: "1px solid #a7f3d0",
+                                  }}
+                                />
+                              )}
+                              {isSelf && (
+                                <Chip
+                                  label="You"
+                                  size="small"
+                                  sx={{
+                                    height: 20,
+                                    fontSize: "0.66rem",
+                                    fontWeight: 700,
+                                    bgcolor: "#eff6ff",
+                                    color: "#2563eb",
+                                  }}
+                                />
+                              )}
+                            </Box>
+
+                            <Typography sx={{ fontSize: "0.74rem", color: "#000", fontWeight: 600, mt: 0.2 }}>
+                              {hasItems
+                                ? `${itemCount} ${itemCount === 1 ? "item" : "items"} • ₹${memberSubtotal.toFixed(2)}`
+                                : "0 items added"}
+                            </Typography>
+                          </Box>
+                        </Box>
+
+                        {/* Right: Status Pill & Accordion Expand Icon */}
+                        <Box sx={{ display: "flex", alignItems: "center", gap: 1, flexShrink: 0 }}>
+                          {isHost ? (
+                            <Chip
+                              label="Host"
+                              size="small"
+                              sx={{
+                                height: 24,
+                                fontSize: "0.7rem",
+                                fontWeight: 700,
+                                bgcolor: "#ecfdf5",
+                                color: "#059669",
+                                border: "1px solid #a7f3d0",
+                              }}
+                            />
+                          ) : !hasItems ? (
+                            <Tooltip title="Member has not added items (by default counted as Continue)" arrow>
+                              <Chip
+                                label="Ready (No items)"
+                                size="small"
+                                sx={{
+                                  height: 24,
+                                  fontSize: "0.7rem",
+                                  fontWeight: 700,
+                                  bgcolor: "#f0fdf4",
+                                  color: "#16a34a",
+                                  border: "1px solid #bbf7d0",
+                                }}
+                              />
+                            </Tooltip>
+                          ) : readyStatus ? (
+                            <Chip
+                              label="Ready ✓"
+                              size="small"
+                              sx={{
+                                height: 24,
+                                fontSize: "0.7rem",
+                                fontWeight: 700,
+                                bgcolor: "#dcfce7",
+                                color: "#15803d",
+                                border: "1px solid #86efac",
+                              }}
+                            />
+                          ) : (
+                            <Chip
+                              label="Ordering..."
+                              size="small"
+                              sx={{
+                                height: 24,
+                                fontSize: "0.7rem",
+                                fontWeight: 700,
+                                bgcolor: "#fef3c7",
+                                color: "#b45309",
+                                border: "1px solid #fde68a",
+                              }}
+                            />
+                          )}
+
+                          <KeyboardArrowDownRoundedIcon
+                            sx={{
+                              transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)",
+                              transition: "transform 0.2s ease",
+                              color: "#64748b",
+                              fontSize: 22,
+                            }}
+                          />
+                        </Box>
+                      </Box>
+
+                      {/* Accordion Content: Items Added by this User */}
+                      <Collapse in={isExpanded} timeout="auto">
+                        <Box sx={{ p: 1.2, pt: 0.5, borderTop: isExpanded ? "1px solid #f1f5f9" : "none" }}>
+                          {!hasItems ? (
+                            <Box
+                              sx={{
+                                py: 2,
+                                px: 2,
+                                textAlign: "center",
+                                bgcolor: "#f8fafc",
+                                borderRadius: "12px",
+                                border: "1px dashed #e2e8f0",
+                                my: 0.5,
+                              }}
+                            >
+                              <Typography sx={{ fontSize: "0.78rem", color: "#94a3b8", fontWeight: 600 }}>
+                                No items added yet by {mName}
+                              </Typography>
+                           
+                            </Box>
+                          ) : (
+                            <Stack spacing={1} sx={{ my: 0.5 }}>
+                              {memberItems.map((item, idx) => {
+                                const itemImg = item.image || getFallbackImage(item.itemname);
+                                const lineTotal = (Number(item.price) || 0) * (Number(item.quantity) || 1);
+                                const isVeg = item.isVeg ?? true;
+
+                                return (
+                                  <Box
+                                    key={item._id || `${item.foodId}-${idx}`}
+                                    sx={{
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: 1.4,
+                                      p: 1.2,
+                                      borderRadius: "14px",
+                                      border: "1px solid #f1f5f9",
+                                      backgroundColor: "#ffffff",
+                                      boxShadow: "0 1px 4px rgba(0,0,0,0.02)",
+                                    }}
+                                  >
+                                    <Box
+                                      component="img"
+                                      src={itemImg}
+                                      alt={item.itemname}
+                                      sx={{
+                                        width: 50,
+                                        height: 50,
+                                        borderRadius: "10px",
+                                        objectFit: "cover",
+                                        backgroundColor: "#f8fafc",
+                                        flexShrink: 0,
+                                      }}
+                                    />
+
+                                    <Box sx={{ flex: 1, minWidth: 0 }}>
+                                      <Typography
+                                        sx={{
+                                          fontWeight: 700,
+                                          fontSize: "0.84rem",
+                                          color: "#0f172a",
+                                          whiteSpace: "nowrap",
+                                          overflow: "hidden",
+                                          textOverflow: "ellipsis",
+                                          textTransform: "capitalize",
+                                        }}
+                                      >
+                                        {item.itemname} {isVeg ? "(Veg)" : "(Non Veg)"}
+                                      </Typography>
+
+                                      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mt: 0.4 }}>
+                                        <Typography sx={{ fontWeight: 800, fontSize: "0.84rem", color: "#059669" }}>
+                                          ₹{Number(item.price || 0).toFixed(2)}
+                                        </Typography>
+                                        <Typography sx={{ fontSize: "0.9rem", fontWeight: 700 }}>
+                                          {item.quantity}X
+                                        </Typography>
+                                      </Box>
+                                    </Box>
+
+                                    <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 0.5 }}>
+                                      <Typography sx={{ fontWeight: 800, fontSize: "0.88rem", color: "#059669" }}>
+                                        ₹{lineTotal.toFixed(2)}
+                                      </Typography>
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => handleRemoveItem(item._id, item.foodId)}
+                                        sx={{ color: "#cbd5e1", p: 0.2, "&:hover": { color: "#ef4444" } }}
+                                      >
+                                        <DeleteOutlineRoundedIcon sx={{ fontSize: 18 }} />
+                                      </IconButton>
+                                    </Box>
+                                  </Box>
+                                );
+                              })}
+                            </Stack>
+                          )}
+                        </Box>
+                      </Collapse>
+                    </Box>
+                  );
+                })}
+              </Stack>
+            ) : (
+              /* Solo / Non-collaborative items list (NO added by chip) */
+              <Stack spacing={1.2}>
                 {cartItems.map((item, idx) => {
                   const itemImg = item.image || getFallbackImage(item.itemname);
                   const lineTotal = (Number(item.price) || 0) * (Number(item.quantity) || 1);
                   const isVeg = item.isVeg ?? true;
-                  const memberName = item.addedBy?.name || item.addedBy?.username || "You";
 
                   return (
                     <Box
@@ -2600,19 +3028,6 @@ export default function Menu() {
                           <Typography sx={{ fontSize: "0.76rem", color: "#94a3b8", fontWeight: 700 }}>
                             {item.quantity}X
                           </Typography>
-                          <Box
-                            sx={{
-                              backgroundColor: "#f1f5f9",
-                              color: "#475569",
-                              fontSize: "0.68rem",
-                              fontWeight: 700,
-                              px: 0.8,
-                              py: 0.1,
-                              borderRadius: "6px",
-                            }}
-                          >
-                            Added by {memberName}
-                          </Box>
                         </Box>
                       </Box>
 
@@ -2686,19 +3101,19 @@ export default function Menu() {
                         justifyContent: "center",
                         py: 1,
                         px: 0.5,
-                        borderRadius: "14px",
+                        borderRadius: "10px",
                         cursor: "pointer",
-                        border: isSelected ? "1.5px solid #22c55e" : "1px solid #e2e8f0",
-                        backgroundColor: isSelected ? "#eaf8f0" : "#ffffff",
+                        border: isSelected ? "1.5px solid #2563eb" : "1px solid #e2e8f0",
+                        backgroundColor: isSelected ? "#eff6ff" : "#ffffff",
                         transition: "all 0.15s ease",
                       }}
                     >
-                      <IconComp sx={{ fontSize: 20, color: isSelected ? "#059669" : "#64748b", mb: 0.3 }} />
+                      <IconComp sx={{ fontSize: 20, color: isSelected ? "#2563eb" : "#64748b", mb: 0.3 }} />
                       <Typography
                         sx={{
                           fontSize: "0.72rem",
                           fontWeight: 700,
-                          color: isSelected ? "#059669" : "#64748b",
+                          color: isSelected ? "#2563eb" : "#64748b",
                           textAlign: "center",
                         }}
                       >
@@ -2713,36 +3128,46 @@ export default function Menu() {
             {/* Action Buttons: Joined Members ONLY see Continue button; Creator & Solo see Pay Button */}
             {isJoinedMember ? (
               <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                <Typography sx={{ fontSize: "0.76rem", color: "#64748b", textAlign: "center", fontWeight: 600 }}>
+                {/* <Typography sx={{ fontSize: "0.76rem", color: "#64748b", textAlign: "center", fontWeight: 600 }}>
                   {isCurrentUserReady
                     ? `You notified ${activeTable.creatorName}. Waiting for them to pay & place the order.`
                     : `Finished adding items? Click Continue to notify ${activeTable.creatorName}.`}
-                </Typography>
+                </Typography> */}
                 <Button
                   fullWidth
-                  disabled={cartItems.length === 0}
+                  disabled={!currentUserHasItems}
                   onClick={handleToggleReady}
                   sx={{
-                    backgroundColor: isCurrentUserReady ? "#16a34a" : "#059669",
+                    backgroundColor: !currentUserHasItems
+                      ? "#94a3b8"
+                      : isCurrentUserReady
+                      ? "#16a34a"
+                      : "#2563eb",
                     color: "#ffffff",
-                    fontWeight: 800,
-                    fontSize: "0.98rem",
-                    height: 48,
-                    borderRadius: "14px",
+                    fontWeight: 700,
+                    fontSize: "0.95rem",
+                    height: 46,
+                    borderRadius: "10px",
                     textTransform: "none",
-                    boxShadow: "0 6px 20px rgba(5, 150, 105, 0.25)",
+                    boxShadow: !currentUserHasItems ? "none" : "0 4px 14px rgba(37, 99, 235, 0.25)",
                     "&:hover": {
-                      backgroundColor: isCurrentUserReady ? "#15803d" : "#047857",
+                      backgroundColor: !currentUserHasItems
+                        ? "#94a3b8"
+                        : isCurrentUserReady
+                        ? "#15803d"
+                        : "#1d4ed8",
                     },
                   }}
                 >
-                  {isCurrentUserReady ? "Cart Ready ✓ (Click to change)" : "Continue (Notify Host)"}
+                  {!currentUserHasItems
+                    ? "Continue (Auto-ready: No items)"
+                    : isCurrentUserReady
+                    ? "Cart Ready ✓"
+                    : "Continue (Notify Host)"}
                 </Button>
               </Box>
             ) : (
               <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-       
-
                 <Button
                   fullWidth
                   disabled={
@@ -2755,17 +3180,17 @@ export default function Menu() {
                     backgroundColor:
                       activeTable && isTableCreator && joinedMembersList.length > 0 && !allJoinedMembersReady
                         ? "#94a3b8 !important"
-                        : "#059669",
+                        : "#2563eb",
                     color: "#ffffff !important",
-                    fontWeight: 800,
-                    fontSize: "1rem",
-                    height: 48,
-                    borderRadius: "14px",
+                    fontWeight: 700,
+                    fontSize: "0.98rem",
+                    height: 46,
+                    borderRadius: "10px",
                     textTransform: "none",
                     boxShadow:
                       activeTable && isTableCreator && joinedMembersList.length > 0 && !allJoinedMembersReady
                         ? "none"
-                        : "0 6px 20px rgba(5, 150, 105, 0.25)",
+                        : "0 4px 14px rgba(37, 99, 235, 0.25)",
                     cursor:
                       activeTable && isTableCreator && joinedMembersList.length > 0 && !allJoinedMembersReady
                         ? "not-allowed !important"
@@ -2774,7 +3199,7 @@ export default function Menu() {
                       backgroundColor:
                         activeTable && isTableCreator && joinedMembersList.length > 0 && !allJoinedMembersReady
                           ? "#94a3b8"
-                          : "#047857",
+                          : "#1d4ed8",
                     },
                   }}
                 >
@@ -2793,7 +3218,6 @@ export default function Menu() {
               </Box>
             )}
               </Box>
-            </Box>
             </Box>
           </Box>
         </>
@@ -3085,13 +3509,13 @@ export default function Menu() {
                   variant="contained"
                   disabled={addDishLoading}
                   sx={{
-                    backgroundColor: "#059669",
+                    backgroundColor: "#2563eb",
                     color: "#ffffff",
                     fontWeight: 700,
                     textTransform: "none",
                     borderRadius: "10px",
                     px: 3,
-                    "&:hover": { backgroundColor: "#047857" },
+                    "&:hover": { backgroundColor: "#1d4ed8" },
                   }}
                 >
                   {addDishLoading ? <CircularProgress size={20} sx={{ color: "white" }} /> : "Add Dish"}
@@ -3375,13 +3799,13 @@ export default function Menu() {
                   variant="contained"
                   disabled={editDishLoading}
                   sx={{
-                    backgroundColor: "#059669",
+                    backgroundColor: "#2563eb",
                     color: "#ffffff",
                     fontWeight: 700,
                     textTransform: "none",
                     borderRadius: "10px",
                     px: 3,
-                    "&:hover": { backgroundColor: "#047857" },
+                    "&:hover": { backgroundColor: "#1d4ed8" },
                   }}
                 >
                   {editDishLoading ? <CircularProgress size={20} sx={{ color: "white" }} /> : "Save Changes"}
@@ -3465,9 +3889,9 @@ export default function Menu() {
                     pl: 0.6,
                     pr: 2.5,
                     borderRadius: "9999px",
-                    backgroundColor: "#ea5e21",
+                    backgroundColor: "#2563eb",
                     color: "#ffffff",
-                    boxShadow: "0 4px 14px rgba(234, 94, 33, 0.35)",
+                    boxShadow: "0 4px 14px rgba(37, 99, 235, 0.3)",
                   }}
                 >
                   <Box
@@ -3526,13 +3950,13 @@ export default function Menu() {
                   variant="contained"
                   disabled={addCategoryLoading}
                   sx={{
-                    backgroundColor: "#ea5e21",
+                    backgroundColor: "#2563eb",
                     color: "#ffffff",
                     fontWeight: 700,
                     textTransform: "none",
                     borderRadius: "10px",
                     px: 2.5,
-                    "&:hover": { backgroundColor: "#df531b" },
+                    "&:hover": { backgroundColor: "#1d4ed8" },
                   }}
                 >
                   {addCategoryLoading ? <CircularProgress size={20} sx={{ color: "white" }} /> : "Add Category"}
@@ -3575,9 +3999,9 @@ export default function Menu() {
                     pl: 0.6,
                     pr: 2.5,
                     borderRadius: "9999px",
-                    backgroundColor: "#ea5e21",
+                    backgroundColor: "#2563eb",
                     color: "#ffffff",
-                    boxShadow: "0 4px 14px rgba(234, 94, 33, 0.35)",
+                    boxShadow: "0 4px 14px rgba(37, 99, 235, 0.3)",
                   }}
                 >
                   <Box
@@ -3637,13 +4061,13 @@ export default function Menu() {
                   variant="contained"
                   disabled={editCategoryLoading}
                   sx={{
-                    backgroundColor: "#ea5e21",
+                    backgroundColor: "#2563eb",
                     color: "#ffffff",
                     fontWeight: 700,
                     textTransform: "none",
                     borderRadius: "10px",
                     px: 2.5,
-                    "&:hover": { backgroundColor: "#df531b" },
+                    "&:hover": { backgroundColor: "#1d4ed8" },
                   }}
                 >
                   {editCategoryLoading ? <CircularProgress size={20} sx={{ color: "white" }} /> : "Save Changes"}
@@ -4106,9 +4530,35 @@ export default function Menu() {
                       }}
                     >
                       <Box sx={{ display: "flex", alignItems: "center", gap: 1.2 }}>
-                        <Avatar sx={{ width: 32, height: 32, bgcolor: "#059669", fontSize: "0.8rem", fontWeight: 700 }}>
-                          {m.name ? m.name[0].toUpperCase() : m.username[0].toUpperCase()}
-                        </Avatar>
+                        {(() => {
+                          const isHost = m.username === activeTable.creator;
+                          const mAvatar =
+                            m.avatar ||
+                            (m.username === user?.username ? user?.avatar : "") ||
+                            (isHost ? activeTable.creatorAvatar : "") ||
+                            "";
+                          return (
+                            <Avatar
+                              src={mAvatar || undefined}
+                              sx={{
+                                width: 34,
+                                height: 34,
+                                bgcolor: mAvatar ? "transparent" : isHost ? "#059669" : "#2563eb",
+                                fontSize: "0.8rem",
+                                fontWeight: 700,
+                                border: mAvatar ? "1.5px solid #e2e8f0" : "none",
+                              }}
+                            >
+                              {!mAvatar && (
+                                m.name && isNaN(m.name[0]) ? (
+                                  m.name[0].toUpperCase()
+                                ) : (
+                                  <PersonRoundedIcon sx={{ fontSize: 18, color: "#ffffff" }} />
+                                )
+                              )}
+                            </Avatar>
+                          );
+                        })()}
                         <Box>
                           <Typography sx={{ fontWeight: 700, fontSize: "0.85rem", color: "#0f172a" }}>
                             {m.name || m.username} {m.username === activeTable.creator && "(Host)"}
@@ -4341,104 +4791,6 @@ export default function Menu() {
         </Dialog>
       )}
 
-      {/* Student Food Rating Dialog */}
-      <Dialog
-        open={ratingDialogOpen}
-        onClose={() => setRatingDialogOpen(false)}
-        PaperProps={{
-          sx: {
-            borderRadius: "16px",
-            p: 1,
-            maxWidth: "380px",
-            width: "100%",
-          },
-        }}
-      >
-        <DialogTitle sx={{ fontWeight: 700, fontSize: "1.1rem", color: "#0f172a", pb: 0.5, textTransform: "capitalize" }}>
-          Rate {selectedFoodForRating?.itemname}
-        </DialogTitle>
-        <DialogContent sx={{ display: "flex", flexDirection: "column", alignItems: "center", py: 2 }}>
-          {selectedFoodForRating && (
-            <Box
-              component="img"
-              src={selectedFoodForRating.image || getFallbackImage(selectedFoodForRating.itemname)}
-              alt={selectedFoodForRating.itemname}
-              sx={{
-                width: 80,
-                height: 80,
-                borderRadius: "12px",
-                objectFit: "cover",
-                mb: 1.5,
-                boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
-              }}
-            />
-          )}
-          <Typography sx={{ fontSize: "0.88rem", color: "#64748b", mb: 1, textAlign: "center" }}>
-            How would you rate this dish?
-          </Typography>
-          <Rating
-            name="student-food-rating"
-            value={userRatingScore}
-            precision={1}
-            size="large"
-            onChange={(event, newValue) => {
-              if (newValue !== null) setUserRatingScore(newValue);
-            }}
-            sx={{
-              fontSize: "2.3rem",
-              color: "#f59e0b",
-              mb: 1.5,
-            }}
-          />
-          <Typography sx={{ fontSize: "0.78rem", color: "#94a3b8" }}>
-            {(() => {
-              const f = selectedFoodForRating;
-              if (!f) return "No ratings yet";
-              let avg = 0;
-              let count = 0;
-              if (Array.isArray(f.ratings) && f.ratings.length > 0) {
-                avg = f.ratings.reduce((s, r) => s + (Number(r.rating) || 0), 0) / f.ratings.length;
-                count = f.ratings.length;
-              } else if (typeof f.averageRating === "number" && f.averageRating > 0 && typeof f.totalRatings === "number" && f.totalRatings > 0) {
-                avg = f.averageRating;
-                count = f.totalRatings;
-              }
-              return count > 0 && avg > 0
-                ? `Current Average: ${(Math.round(avg * 10) / 10).toFixed(1)} ★ (${count} reviews)`
-                : "No ratings yet";
-            })()}
-          </Typography>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button
-            onClick={() => setRatingDialogOpen(false)}
-            disabled={ratingSubmitting}
-            sx={{
-              textTransform: "none",
-              color: "#64748b",
-              fontWeight: 600,
-              borderRadius: "8px",
-            }}
-          >
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleRatingSubmit}
-            disabled={ratingSubmitting}
-            sx={{
-              textTransform: "none",
-              fontWeight: 600,
-              borderRadius: "8px",
-              backgroundColor: "#2563eb",
-              "&:hover": { backgroundColor: "#1d4ed8" },
-              px: 2.5,
-            }}
-          >
-            {ratingSubmitting ? "Submitting..." : "Submit Rating"}
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Box>
   );
 }

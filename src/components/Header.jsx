@@ -143,33 +143,66 @@ export default function UnifiedSidebar() {
       }}
     >
       {/* Top Header / Profile Pill */}
+      {/* Top Header / Profile Pill */}
       <Box
         sx={{
-          p: open ? "22px 18px 20px" : "22px 12px 20px",
+          p: open ? "22px 18px 20px" : "14px 8px 18px",
           display: "flex",
+          flexDirection: open ? "row" : "column",
           alignItems: "center",
           justifyContent: open ? "space-between" : "center",
+          gap: open ? 0 : 1.5,
           borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
-          minHeight: 84,
+          minHeight: open ? 84 : 105,
         }}
       >
+        {/* If collapsed: Toggle icon is on top */}
+        {!open && (
+          <IconButton
+            onClick={handleToggle}
+            size="small"
+            sx={{
+              width: 32,
+              height: 32,
+              borderRadius: "50%",
+              backgroundColor: "rgba(255, 255, 255, 0.12)",
+              color: "rgba(255, 255, 255, 0.9)",
+              "&:hover": {
+                backgroundColor: "rgba(255, 255, 255, 0.22)",
+                color: "#ffffff",
+              },
+              transition: "all 0.2s ease",
+            }}
+            title="Expand sidebar"
+          >
+            <ChevronRightRoundedIcon sx={{ fontSize: 18 }} />
+          </IconButton>
+        )}
+
+        {/* Avatar logo (kept below the toggle icon when collapsed) */}
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, minWidth: 0 }}>
           <Box sx={{ position: "relative" }}>
             <Avatar
               src={user?.avatar}
               alt={user?.username || "User"}
               sx={{
-                width: 44,
-                height: 44,
+                width: open ? 44 : 40,
+                height: open ? 44 : 40,
                 background: user?.avatar ? "transparent" : "linear-gradient(135deg, #3b82f6, #6366f1)",
                 border: user?.avatar ? "none" : "2px solid rgba(255, 255, 255, 0.35)",
                 fontWeight: 700,
-                fontSize: "1.1rem",
+                fontSize: "1.05rem",
                 color: "#ffffff",
                 boxShadow: user?.avatar ? "none" : "0 4px 12px rgba(0,0,0,0.2)",
               }}
             >
-              {!user?.avatar && (user?.username ? user.username[0].toUpperCase() : "U")}
+              {!user?.avatar && (
+                user?.username && isNaN(user.username[0]) ? (
+                  user.username[0].toUpperCase()
+                ) : (
+                  <PersonOutlineOutlinedIcon sx={{ fontSize: 20 }} />
+                )
+              )}
             </Avatar>
           </Box>
           {open && (
@@ -206,29 +239,28 @@ export default function UnifiedSidebar() {
           )}
         </Box>
 
-        <IconButton
-          onClick={handleToggle}
-          size="small"
-          sx={{
-            width: 28,
-            height: 28,
-            borderRadius: "50%",
-            backgroundColor: "rgba(255, 255, 255, 0.12)",
-            color: "rgba(255, 255, 255, 0.85)",
-            "&:hover": {
-              backgroundColor: "rgba(255, 255, 255, 0.22)",
-              color: "#ffffff",
-            },
-            transition: "all 0.2s ease",
-          }}
-          title={open ? "Collapse sidebar" : "Expand sidebar"}
-        >
-          {open ? (
+        {/* If open: Toggle button on the right */}
+        {open && (
+          <IconButton
+            onClick={handleToggle}
+            size="small"
+            sx={{
+              width: 28,
+              height: 28,
+              borderRadius: "50%",
+              backgroundColor: "rgba(255, 255, 255, 0.12)",
+              color: "rgba(255, 255, 255, 0.85)",
+              "&:hover": {
+                backgroundColor: "rgba(255, 255, 255, 0.22)",
+                color: "#ffffff",
+              },
+              transition: "all 0.2s ease",
+            }}
+            title="Collapse sidebar"
+          >
             <ChevronLeftRoundedIcon sx={{ fontSize: 18 }} />
-          ) : (
-            <ChevronRightRoundedIcon sx={{ fontSize: 18 }} />
-          )}
-        </IconButton>
+          </IconButton>
+        )}
       </Box>
 
       {/* Navigation Menu Items */}

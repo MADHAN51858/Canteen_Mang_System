@@ -5,6 +5,7 @@ import { Food } from "../models/food.model.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { createOrder } from "./order.controller.js";
 import { Order } from "../models/order.model.js";
+import { Table } from "../models/table.model.js";
 import { uploadOnCloudinary, deleteFromCloudinaryByUrl } from "../utils/cloudinary.js";
 import { sendPasswordResetOtpEmail } from "../utils/mail.service.js";
 
@@ -621,6 +622,11 @@ const toggleBlockUser = asyncHandler(async (req, res) => {
     throw new ApiError(404, "User not found");
   }
 
+  // Prevent blocking admin accounts
+  if (user.role === "admin") {
+    throw new ApiError(403, "Admin accounts cannot be blocked");
+  }
+
   if (status && ["block", "blocked", "unblock"].includes(String(status).toLowerCase())) {
     user.status = String(status).toLowerCase() === "unblock" ? "unblock" : "blocked";
   } else {
@@ -628,6 +634,22 @@ const toggleBlockUser = asyncHandler(async (req, res) => {
     user.status = isCurrentlyBlocked ? "unblock" : "blocked";
   }
   user.blocked = user.status === "blocked";
+
+  if (user.blocked) {
+    // Immediately invalidate active refresh token so session cannot be extended
+    user.refreshToken = "";
+
+    // Remove user from any active tables immediately
+    try {
+      await Table.updateMany(
+        { status: "active", "members.username": user.username },
+        { $pull: { members: { username: user.username } } }
+      );
+    } catch (tblErr) {
+      console.error("Error removing blocked user from active tables:", tblErr);
+    }
+  }
+
   await user.save({ validateBeforeSave: false });
 
   const updatedUser = await User.findById(userId).select("-password -refreshToken");
@@ -661,11 +683,25 @@ const deleteUser = asyncHandler(async (req, res) => {
     throw new ApiError(403, "Cannot delete permanent admin user");
   }
 
-  // Delete user avatar from Cloudinary if one exists
+  // 1. FIRST delete user avatar from Cloudinary if one exists
   if (user.avatar) {
+    console.log(`[User Delete] First deleting avatar from Cloudinary for ${user.username}: ${user.avatar}`);
     await deleteFromCloudinaryByUrl(user.avatar);
   }
 
+  // 2. Also clean up any receipt media from Cloudinary associated with user orders
+  if (Array.isArray(user.orders) && user.orders.length > 0) {
+    const orderNumbers = user.orders.map((o) => o.orderNumber).filter(Boolean);
+    if (orderNumbers.length > 0) {
+      const orders = await Order.find({ orderNumber: { $in: orderNumbers } });
+      for (const ord of orders) {
+        if (ord.receiptImageUrl) await deleteFromCloudinaryByUrl(ord.receiptImageUrl);
+        if (ord.receiptImageUrlNoBarcode) await deleteFromCloudinaryByUrl(ord.receiptImageUrlNoBarcode);
+      }
+    }
+  }
+
+  // 3. THEN delete the user content from database
   await User.findByIdAndDelete(userId);
 
   return res
@@ -771,9 +807,10 @@ const updateProfile = asyncHandler(async (req, res) => {
   }
 
   // Handle avatar upload and delete old avatar from Cloudinary
+  const { avatar } = req.body || {};
   if (req.file) {
     if (user.avatar) {
-      console.log(`[Avatar Update] Deleting old avatar for ${user.username}: ${user.avatar}`);
+      console.log(`[Avatar Update] Deleting previous avatar from Cloudinary for ${user.username}: ${user.avatar}`);
       await deleteFromCloudinaryByUrl(user.avatar);
     }
 
@@ -782,6 +819,12 @@ const updateProfile = asyncHandler(async (req, res) => {
       throw new ApiError(500, "Cloudinary upload failed: Invalid Cloudinary credentials in Backend/.env (check CLOUDINARY_API_SECRET)");
     }
     updateFields.avatar = uploadResult.secure_url;
+  } else if (typeof avatar !== "undefined" && avatar !== user.avatar) {
+    if (user.avatar) {
+      console.log(`[Avatar URL Changed] Deleting old avatar from Cloudinary for ${user.username}: ${user.avatar}`);
+      await deleteFromCloudinaryByUrl(user.avatar);
+    }
+    updateFields.avatar = avatar;
   }
 
   const oldUsername = user.username;

@@ -64,15 +64,23 @@ export function CartProvider({ children }) {
 
   function logout() {
     setUser(null);
+    setCart([]);
     try {
       sessionStorage.removeItem('user');
+      sessionStorage.removeItem('cart');
+      localStorage.removeItem('user');
+      localStorage.removeItem('cart');
     } catch (e) {}
   }
 
   function clearUser() {
     setUser(null);
+    setCart([]);
     try {
       sessionStorage.removeItem('user');
+      sessionStorage.removeItem('cart');
+      localStorage.removeItem('user');
+      localStorage.removeItem('cart');
     } catch (e) {}
   }
 

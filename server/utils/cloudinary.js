@@ -31,32 +31,64 @@ const uploadOnCloudinary = async (LocalFilePath) => {
     }
 }
 
+const extractPublicId = (url) => {
+    if (!url || typeof url !== "string") return null;
+    if (!url.includes("res.cloudinary.com")) return null;
+
+    const cleanUrl = url.split("?")[0].split("#")[0];
+    const uploadIndex = cleanUrl.indexOf("/upload/");
+    if (uploadIndex === -1) return null;
+
+    const pathAfterUpload = cleanUrl.substring(uploadIndex + "/upload/".length);
+    const segments = pathAfterUpload.split("/");
+    const pathSegments = [];
+
+    for (const segment of segments) {
+        // Skip version tags like v1788627439
+        if (/^v\d+$/.test(segment)) continue;
+        // Skip transformation directives like w_400, c_scale, etc.
+        if (/^(?:[a-z]{1,2}_|c_|w_|h_|q_|f_|b_|e_|fl_|g_)/.test(segment) || segment.includes(",")) continue;
+        pathSegments.push(segment);
+    }
+
+    const fullPathWithExt = pathSegments.join("/");
+    const lastDotIndex = fullPathWithExt.lastIndexOf(".");
+    const publicId = lastDotIndex !== -1 ? fullPathWithExt.substring(0, lastDotIndex) : fullPathWithExt;
+
+    return publicId || null;
+};
+
 const deleteFromCloudinaryByUrl = async (url) => {
     try {
         if (!url || typeof url !== "string") return { ok: false, reason: "no-url" };
 
-        // Remove query parameters
-        const cleanUrl = url.split("?")[0];
-
-        // Cloudinary URL structure:
-        // https://res.cloudinary.com/<cloud_name>/image/upload/(optional transformations)/(optional v123456/)(public_id).(ext)
-        const match = cleanUrl.match(/\/upload\/(?:[^\/]+\/)?(?:v\d+\/)?(.+?)(\.[^.\/]+)?$/);
-        const publicId = match?.[1];
-
+        const publicId = extractPublicId(url);
         if (!publicId) {
-            return { ok: false, reason: "no-public-id" };
+            return { ok: false, reason: "not-cloudinary-url" };
         }
 
-        const result = await cloudinary.uploader.destroy(publicId, {
+        console.log(`[Cloudinary Media Delete] Initiating deletion for publicId: ${publicId}`);
+
+        // Try destroying as image first
+        let result = await cloudinary.uploader.destroy(publicId, {
             resource_type: "image",
             invalidate: true,
         });
-        console.log(`[Cloudinary Permanent Delete] publicId: ${publicId}, result:`, result);
+
+        // If not found as image, try raw resource type
+        if (result?.result === "not found") {
+            result = await cloudinary.uploader.destroy(publicId, {
+                resource_type: "raw",
+                invalidate: true,
+            });
+        }
+
+        console.log(`[Cloudinary Media Delete Complete] publicId: ${publicId}, result:`, result);
         return { ok: true, result };
     } catch (err) {
-        console.error("Cloudinary delete error:", err);
+        console.error(`[Cloudinary Media Delete Error] Failed for URL ${url}:`, err);
         return { ok: false, reason: err?.message || "delete-failed" };
     }
-}
+};
 
-export { uploadOnCloudinary, deleteFromCloudinaryByUrl }
+export { uploadOnCloudinary, deleteFromCloudinaryByUrl, extractPublicId };

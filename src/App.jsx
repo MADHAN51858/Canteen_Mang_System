@@ -17,7 +17,8 @@ import { ToastProvider } from "./context/ToastContext";
 import { SnackbarProvider } from "./context/SnackbarContext";
 import { useContext, useEffect, useState } from "react";
 import ProtectedRoute from "./components/ProtectedRoute";
-import { setOnUnauthorized } from "./utils/api";
+import { setOnUnauthorized, get } from "./utils/api";
+import { useSnackbar } from "./hooks/useSnackbar";
 
 function HeaderSelector(){
   const location = useLocation();
@@ -34,14 +35,55 @@ function HeaderSelector(){
 
 function AuthHandler() {
   const navigate = useNavigate();
-  const { logout } = useContext(CartContext);
+  const { user, logout } = useContext(CartContext);
+  const { enqueueSnackbar } = useSnackbar();
 
   useEffect(() => {
-    setOnUnauthorized(() => {
+    setOnUnauthorized((message) => {
       logout();
+      enqueueSnackbar(message || "Your account has been blocked or session expired.", {
+        variant: "error",
+      });
       navigate("/login");
     });
-  }, [navigate, logout]);
+  }, [navigate, logout, enqueueSnackbar]);
+
+  // Proactive heartbeat: checks user status every 3 seconds so if admin blocks the user,
+  // they are instantly logged out without having to wait until their next login or token expiry
+  useEffect(() => {
+    if (!user || !user._id) return;
+
+    let isMounted = true;
+    const verifyUserSession = async () => {
+      try {
+        const res = await get("/users/getMe");
+        if (!isMounted) return;
+        if (
+          res &&
+          (!res.success ||
+            res.status === 401 ||
+            res.data?.user?.blocked ||
+            res.data?.user?.status === "blocked" ||
+            res.data?.user?.status === "block")
+        ) {
+          logout();
+          enqueueSnackbar(
+            res.message || "Your account has been blocked by an administrator.",
+            { variant: "error" }
+          );
+          navigate("/login");
+        }
+      } catch (err) {
+        // Any 401 response directly calls onUnauthorized
+      }
+    };
+
+    const intervalId = setInterval(verifyUserSession, 3000);
+    return () => {
+      isMounted = false;
+      clearInterval(intervalId);
+    };
+  }, [user?._id, logout, navigate, enqueueSnackbar]);
 
   return null;
 }

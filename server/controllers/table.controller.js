@@ -107,25 +107,84 @@ const joinTable = asyncHandler(async (req, res) => {
   }
 
   const queryStr = String(tableIdOrName).trim();
+  const cleanRoll = queryStr.replace(/^roll\s*/i, "").trim();
 
-  // Find most recent table by roll number (tableId or creatorRollNo), tableName, or creator
-  const table = await Table.findOne({
+  // 1. First priority: Search for an already ACTIVE table matching query
+  let table = await Table.findOne({
+    status: "active",
     $or: [
-      { tableId: { $regex: new RegExp(`^${queryStr}$`, "i") } },
-      { creatorRollNo: { $regex: new RegExp(`^${queryStr}$`, "i") } },
-      { tableName: { $regex: new RegExp(`^${queryStr}$`, "i") } },
-      { creator: { $regex: new RegExp(`^${queryStr}$`, "i") } },
+      { tableId: { $regex: new RegExp(`^(${queryStr}|${cleanRoll})$`, "i") } },
+      { creatorRollNo: { $regex: new RegExp(`^(${queryStr}|${cleanRoll})$`, "i") } },
+      { tableName: { $regex: new RegExp(`^(${queryStr}|${cleanRoll}|Roll\\s+${cleanRoll})$`, "i") } },
+      { creator: { $regex: new RegExp(`^(${queryStr}|${cleanRoll})$`, "i") } },
     ],
-  }).sort({ createdAt: -1 });
+  }).sort({ updatedAt: -1, createdAt: -1 });
+
+  // 2. If no active table found, check if a table existed previously (e.g. closed/ordered) and reactivate it
+  if (!table) {
+    const existingTable = await Table.findOne({
+      $or: [
+        { tableId: { $regex: new RegExp(`^(${queryStr}|${cleanRoll})$`, "i") } },
+        { creatorRollNo: { $regex: new RegExp(`^(${queryStr}|${cleanRoll})$`, "i") } },
+        { tableName: { $regex: new RegExp(`^(${queryStr}|${cleanRoll}|Roll\\s+${cleanRoll})$`, "i") } },
+        { creator: { $regex: new RegExp(`^(${queryStr}|${cleanRoll})$`, "i") } },
+      ],
+    }).sort({ updatedAt: -1, createdAt: -1 });
+
+    if (existingTable) {
+      existingTable.status = "active";
+      if (existingTable.status === "ordered" || existingTable.status === "closed" || !existingTable.status) {
+        existingTable.items = [];
+        existingTable.orderNumber = "";
+        existingTable.orderType = "Order Now";
+      }
+      table = existingTable;
+    }
+  }
+
+  // 3. If no table document exists at all, check if a student user exists with this Roll Number and create an active table session
+  if (!table) {
+    const hostUser = await User.findOne({
+      $or: [
+        { rollNo: { $regex: new RegExp(`^(${queryStr}|${cleanRoll})$`, "i") } },
+        { username: { $regex: new RegExp(`^(${queryStr}|${cleanRoll})$`, "i") } },
+      ],
+    });
+
+    if (hostUser) {
+      const hostRoll = (hostUser.rollNo ? String(hostUser.rollNo) : hostUser.username).trim();
+      const hostTableId = hostRoll.toUpperCase();
+      const hostTableName = hostUser.rollNo ? `Roll ${hostUser.rollNo.toUpperCase()}` : `${hostUser.username}'s Table`;
+
+      table = await Table.create({
+        tableId: hostTableId,
+        tableName: hostTableName,
+        creator: hostUser.username.toLowerCase(),
+        creatorRollNo: hostUser.rollNo || hostRoll,
+        creatorName: hostUser.name || hostUser.username,
+        creatorAvatar: hostUser.avatar || "",
+        members: [
+          {
+            userId: hostUser._id,
+            username: hostUser.username.toLowerCase(),
+            name: hostUser.name || hostUser.username,
+            avatar: hostUser.avatar || "",
+            isReady: true,
+          },
+        ],
+        items: [],
+        status: "active",
+        orderType: "Order Now",
+      });
+    }
+  }
 
   if (!table) {
-    throw new ApiError(404, `No table found for Roll Number "${queryStr}". Please verify the Roll Number.`);
+    throw new ApiError(404, `No student or table found for Roll Number "${queryStr}". Please verify the Roll Number.`);
   }
 
-  // Check whether table is active or inactive
-  if (table.status !== "active") {
-    throw new ApiError(400, `Table for Roll Number "${queryStr}" is inactive or has already ended.`);
-  }
+  // Ensure table status is active
+  table.status = "active";
 
   // Check if user is already in this table
   const currentUsernameLower = String(user.username || "").toLowerCase();
@@ -149,8 +208,9 @@ const joinTable = asyncHandler(async (req, res) => {
       avatar: user.avatar || "",
       isReady: false,
     });
-    await table.save();
   }
+
+  await table.save();
 
   return res
     .status(200)
@@ -221,6 +281,23 @@ const getMyTable = asyncHandler(async (req, res) => {
         : []),
     ],
   }).sort({ updatedAt: -1 });
+
+  if (table && user.avatar) {
+    let changed = false;
+    table.members.forEach((m) => {
+      if (String(m.username).toLowerCase() === userName && (!m.avatar || m.avatar !== user.avatar)) {
+        m.avatar = user.avatar;
+        changed = true;
+      }
+    });
+    if (String(table.creator).toLowerCase() === userName && (!table.creatorAvatar || table.creatorAvatar !== user.avatar)) {
+      table.creatorAvatar = user.avatar;
+      changed = true;
+    }
+    if (changed) {
+      await table.save();
+    }
+  }
 
   return res.status(200).json(new ApiResponse(200, table, "Fetched current table details"));
 });
@@ -399,12 +476,22 @@ const placeTableOrder = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Table cart is empty. Please add items before placing order.");
   }
 
-  // Ensure all joined members have clicked Continue (marked isReady)
+  // Ensure joined members who added items have clicked Continue (marked isReady)
+  // If any member is active in table, but has NOT added any items to cart, by default count them as continue!
   const joinedMembers = (table.members || []).filter((m) => {
     const mUser = String(m.username || "").trim().toLowerCase();
     return mUser !== creatorUser && (!creatorRoll || mUser !== creatorRoll);
   });
-  const unreadyMembers = joinedMembers.filter((m) => !m.isReady);
+
+  const membersWithItems = joinedMembers.filter((m) => {
+    const mUser = String(m.username || "").trim().toLowerCase();
+    return (table.items || []).some((it) => {
+      const addedUser = String(it.addedBy?.username || "").trim().toLowerCase();
+      return addedUser === mUser;
+    });
+  });
+
+  const unreadyMembers = membersWithItems.filter((m) => !m.isReady);
   if (unreadyMembers.length > 0) {
     const unreadyNames = unreadyMembers.map((m) => m.name || m.username).join(", ");
     throw new ApiError(

@@ -172,18 +172,25 @@ const updateItem = asyncHandler(async (req, res) => {
     update.description = typeof description === "string" ? description.trim() : "";
   }
 
-  if (typeof image !== "undefined") update.image = image;
-
-  // If a file was uploaded via multer (multipart/form-data), upload it and set image
+  // Handle media updates: delete old media in Cloudinary whenever media is updated
   if (req.file) {
-    // Permanently delete old food image from Cloudinary
+    // 1. Delete previous media from Cloudinary first
     if (existingFood.image) {
-      console.log(`[Food Image Update] Deleting old image for ${existingFood.itemname}: ${existingFood.image}`);
+      console.log(`[Food Media Update] Deleting old media for ${existingFood.itemname}: ${existingFood.image}`);
       await deleteFromCloudinaryByUrl(existingFood.image);
     }
+    // 2. Upload new media to Cloudinary
     const uploadResult = await uploadOnCloudinary(req.file.path);
-    if (uploadResult && uploadResult.secure_url)
+    if (uploadResult && uploadResult.secure_url) {
       update.image = uploadResult.secure_url;
+    }
+  } else if (typeof image !== "undefined" && image !== existingFood.image) {
+    // If image URL is explicitly changed or cleared, delete the old media from Cloudinary
+    if (existingFood.image) {
+      console.log(`[Food Media URL Change] Deleting previous media for ${existingFood.itemname}: ${existingFood.image}`);
+      await deleteFromCloudinaryByUrl(existingFood.image);
+    }
+    update.image = image;
   }
 
   let updated;
@@ -203,31 +210,37 @@ const updateItem = asyncHandler(async (req, res) => {
 });
 
 const removeItem = asyncHandler(async (req, res) => {
-  const { itemname } = req.body;
+  const { itemname, id, _id } = req.body || {};
 
-  if (!itemname) {
-    throw new ApiError(400, "Itemname not Found");
+  if (!itemname && !id && !_id) {
+    throw new ApiError(400, "Item identifier (itemname or id) is required for deletion");
   }
 
-  const food = await Food.findOne({
-    itemname: itemname.trim().toLowerCase(),
-  });
+  const query = {};
+  if (id || _id) {
+    query._id = id || _id;
+  } else {
+    query.itemname = itemname.trim().toLowerCase();
+  }
+
+  const food = await Food.findOne(query);
 
   if (!food) {
     return res.status(404).json(new ApiResponse(404, null, "Item Not Found"));
   }
 
-  // Permanently delete food image from Cloudinary
+  // 1. FIRST delete the media from Cloudinary
   if (food.image) {
-    console.log(`[Food Delete] Deleting image for ${food.itemname}: ${food.image}`);
+    console.log(`[Food Delete] First deleting media from Cloudinary for ${food.itemname}: ${food.image}`);
     await deleteFromCloudinaryByUrl(food.image);
   }
 
+  // 2. THEN delete the content from the database
   await Food.deleteOne({ _id: food._id });
 
   return res
     .status(200)
-    .json(new ApiResponse(200, itemname, "Items Deleted Successfully"));
+    .json(new ApiResponse(200, food.itemname, "Item and associated media deleted successfully"));
 });
 
 

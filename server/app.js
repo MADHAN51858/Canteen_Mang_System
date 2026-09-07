@@ -84,13 +84,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const distPath = path.resolve(__dirname, "../dist");
 
-// Serve frontend dist build if present
-if (fs.existsSync(distPath)) {
+// Serve frontend dist build only in production
+if (process.env.NODE_ENV === "production" && fs.existsSync(distPath)) {
   app.use(express.static(distPath));
 }
 
-// Fallback for client-side routing (Express 5 compatible)
+// Fallback for client-side routing in production (Express 5 compatible)
 app.use((req, res, next) => {
+  if (process.env.NODE_ENV !== "production") {
+    return next();
+  }
   if (
     req.path.startsWith("/users") ||
     req.path.startsWith("/food") ||

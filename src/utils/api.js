@@ -19,19 +19,21 @@ async function post(path, body){
     const res = await axios.post(path, body, { withCredentials: true });
     return res.data;
   } catch (error) {
-    if (error.response?.status === 401) {
+    const isBlockedMsg = String(error.response?.data?.message || "").toLowerCase().includes("block");
+    if (error.response?.status === 401 || (error.response?.status === 403 && isBlockedMsg)) {
+      const msg = error.response?.data?.message || "Session expired. Please login again.";
       if (onUnauthorized) {
-        onUnauthorized();
+        onUnauthorized(msg);
       }
-      return { success: false, status: 401, message: "Session expired. Please login again." }
+      return { success: false, status: error.response?.status || 401, message: msg };
     }
     
     if (error.response?.data) {
-      return { success: false, status: error.response.status, ...error.response.data }
+      return { success: false, status: error.response.status, ...error.response.data };
     }
     
     const cleanMessage = error.message || "An error occurred. Please try again.";
-    return { success: false, status: error.response?.status || 500, message: cleanMessage }
+    return { success: false, status: error.response?.status || 500, message: cleanMessage };
   }
 }
 
@@ -40,19 +42,21 @@ async function get(path){
     const res = await axios.get(path, { withCredentials: true });
     return res.data;
   } catch (error) {
-    if (error.response?.status === 401) {
+    const isBlockedMsg = String(error.response?.data?.message || "").toLowerCase().includes("block");
+    if (error.response?.status === 401 || (error.response?.status === 403 && isBlockedMsg)) {
+      const msg = error.response?.data?.message || "Session expired. Please login again.";
       if (onUnauthorized) {
-        onUnauthorized();
+        onUnauthorized(msg);
       }
-      return { success: false, status: 401, message: "Session expired. Please login again." }
+      return { success: false, status: error.response?.status || 401, message: msg };
     }
     
     if (error.response?.data) {
-      return { success: false, status: error.response.status, ...error.response.data }
+      return { success: false, status: error.response.status, ...error.response.data };
     }
     
     const cleanMessage = error.message || "An error occurred. Please try again.";
-    return { success: false, status: error.response?.status || 500, message: cleanMessage }
+    return { success: false, status: error.response?.status || 500, message: cleanMessage };
   }
 }
 
@@ -64,19 +68,21 @@ async function postForm(path, formData){
     });
     return res.data;
   } catch (error) {
-    if (error.response?.status === 401) {
+    const isBlockedMsg = String(error.response?.data?.message || "").toLowerCase().includes("block");
+    if (error.response?.status === 401 || (error.response?.status === 403 && isBlockedMsg)) {
+      const msg = error.response?.data?.message || "Session expired. Please login again.";
       if (onUnauthorized) {
-        onUnauthorized();
+        onUnauthorized(msg);
       }
-      return { success: false, status: 401, message: "Session expired. Please login again." }
+      return { success: false, status: error.response?.status || 401, message: msg };
     }
     
     if (error.response?.data) {
-      return { success: false, status: error.response.status, ...error.response.data }
+      return { success: false, status: error.response.status, ...error.response.data };
     }
     
     const cleanMessage = error.message || "An error occurred. Please try again.";
-    return { success: false, status: error.response?.status || 500, message: cleanMessage }
+    return { success: false, status: error.response?.status || 500, message: cleanMessage };
   }
 }
 
