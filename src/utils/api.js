@@ -37,15 +37,15 @@ async function post(path, body){
   }
 }
 
-async function get(path){
+async function get(path, options = {}){
   try {
-    const res = await axios.get(path, { withCredentials: true });
+    const res = await axios.get(path, { withCredentials: true, ...options });
     return res.data;
   } catch (error) {
     const isBlockedMsg = String(error.response?.data?.message || "").toLowerCase().includes("block");
     if (error.response?.status === 401 || (error.response?.status === 403 && isBlockedMsg)) {
       const msg = error.response?.data?.message || "Session expired. Please login again.";
-      if (onUnauthorized) {
+      if (onUnauthorized && !options?.skipAuthRedirect) {
         onUnauthorized(msg);
       }
       return { success: false, status: error.response?.status || 401, message: msg };

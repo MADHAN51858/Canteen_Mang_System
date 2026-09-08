@@ -1356,47 +1356,6 @@ export default function UserProfile() {
             </Typography>
           </Box>
 
-          {/* Quick preset amount chips */}
-          <Typography sx={{ fontSize: "0.78rem", fontWeight: 700, color: "#64748b", mb: 1, textTransform: "uppercase" }}>
-            Quick Select
-          </Typography>
-          <Stack direction="row" spacing={1} sx={{ mb: 2.5, flexWrap: "wrap", gap: 0.8 }}>
-            {[500, 1000, 2000].filter((amt) => amt <= walletBalance).map((amt) => (
-              <Chip
-                key={amt}
-                label={`₹${amt}`}
-                onClick={() => setWithdrawAmount(String(amt))}
-                sx={{
-                  fontWeight: 700,
-                  fontSize: "0.82rem",
-                  cursor: "pointer",
-                  bgcolor: withdrawAmount === String(amt) ? "#eff6ff" : "#f8fafc",
-                  color: withdrawAmount === String(amt) ? "#2563eb" : "#334155",
-                  borderColor: withdrawAmount === String(amt) ? "#3b82f6" : "#e2e8f0",
-                  borderWidth: 1,
-                  borderStyle: "solid",
-                  "&:hover": { bgcolor: "#eff6ff" },
-                }}
-              />
-            ))}
-            {walletBalance > 0 && (
-              <Chip
-                label={`All (₹${walletBalance})`}
-                onClick={() => setWithdrawAmount(String(walletBalance))}
-                sx={{
-                  fontWeight: 700,
-                  fontSize: "0.82rem",
-                  cursor: "pointer",
-                  bgcolor: withdrawAmount === String(walletBalance) ? "#eff6ff" : "#f8fafc",
-                  color: withdrawAmount === String(walletBalance) ? "#2563eb" : "#334155",
-                  borderColor: withdrawAmount === String(walletBalance) ? "#3b82f6" : "#e2e8f0",
-                  borderWidth: 1,
-                  borderStyle: "solid",
-                  "&:hover": { bgcolor: "#eff6ff" },
-                }}
-              />
-            )}
-          </Stack>
 
           <TextField
             autoFocus

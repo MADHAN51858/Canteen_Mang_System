@@ -41,10 +41,14 @@ function AuthHandler() {
   useEffect(() => {
     setOnUnauthorized((message) => {
       logout();
-      enqueueSnackbar(message || "Your account has been blocked or session expired.", {
-        variant: "error",
-      });
-      navigate("/login");
+      const authPages = ['/login', '/', '/register', '/forgot-password'];
+      const isAuthPage = authPages.includes(window.location.pathname);
+      if (!isAuthPage) {
+        enqueueSnackbar(message || "Your account has been blocked or session expired.", {
+          variant: "error",
+        });
+        navigate("/login");
+      }
     });
   }, [navigate, logout, enqueueSnackbar]);
 

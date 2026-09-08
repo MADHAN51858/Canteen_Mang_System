@@ -25,23 +25,36 @@ export function CartProvider({ children }) {
     }
   });
 
-  // Purge any legacy localStorage items and always fetch fresh user from backend API
+  // Purge any legacy localStorage items and only sync user from backend if a logged-in session exists
   useEffect(() => {
     try {
       localStorage.removeItem('cart');
       localStorage.removeItem('user');
     } catch (e) {}
 
+    const authPages = ['/login', '/', '/register', '/forgot-password'];
+    const isAuthPage = authPages.includes(window.location.pathname);
+    const savedUser = sessionStorage.getItem('user');
+
+    // Only attempt to sync if a user session exists and we are not on an auth page
+    if (!savedUser || isAuthPage) {
+      return;
+    }
+
     async function syncUserWithBackend() {
       try {
-        const res = await get("/users/getMe");
+        const res = await get("/users/getMe", { skipAuthRedirect: true });
         if (res && res.success && res.data?.user) {
           const freshUser = res.data.user;
           setUser(freshUser);
           sessionStorage.setItem('user', JSON.stringify(freshUser));
+        } else if (res && (res.status === 401 || !res.success)) {
+          // Stale session or expired cookie
+          setUser(null);
+          sessionStorage.removeItem('user');
         }
       } catch (err) {
-        // Unauthenticated or network error; keep existing session state
+        // Network error; keep existing session state
       }
     }
 
