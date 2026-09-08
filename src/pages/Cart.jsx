@@ -50,7 +50,7 @@ export async function openRazorpay(amount, description = "Order Payment") {
   return new Promise((resolve, reject) => {
     const isWithdraw = description?.toLowerCase().includes("withdraw");
     const options = {
-      key: "rzp_test_RgiPSqw18Sa2P8",
+      key: import.meta.env.VITE_RAZORPAY_KEY_ID,
       amount: Math.round(amount * 100), // Convert to paise
       currency: "INR",
       name: isWithdraw ? "Wallet Withdrawal" : "Food Ordering App",

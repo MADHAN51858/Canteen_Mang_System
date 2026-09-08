@@ -172,7 +172,7 @@ export async function openRazorpay(amount) {
 
   return new Promise((resolve) => {
     const options = {
-      key: "rzp_test_RgiPSqw18Sa2P8",
+      key: import.meta.env.VITE_RAZORPAY_KEY_ID,
       amount: Math.round(amount * 100), // Convert to paise
       currency: "INR",
       name: "Canteen Food Order",
