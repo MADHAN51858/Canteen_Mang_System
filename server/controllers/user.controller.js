@@ -1401,6 +1401,13 @@ const verifyWalletPayment = asyncHandler(async (req, res) => {
   );
 });
 
+const getRazorpayKey = asyncHandler(async (req, res) => {
+  const keyId = process.env.RAZORPAY_KEY_ID || process.env.VITE_RAZORPAY_KEY_ID || "rzp_test_TZXnGTteZkxaVh";
+  return res.status(200).json(
+    new ApiResponse(200, { keyId }, "Fetched Razorpay Key")
+  );
+});
+
 export {
   registerUser,
   addFriends,
@@ -1427,5 +1434,6 @@ export {
   createRazorpayOrder,
   createWalletOrder,
   verifyWalletPayment,
+  getRazorpayKey,
 };
 

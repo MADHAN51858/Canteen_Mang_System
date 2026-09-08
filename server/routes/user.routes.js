@@ -25,12 +25,14 @@ import {
     createRazorpayOrder,
     createWalletOrder,
     verifyWalletPayment,
+    getRazorpayKey,
 } from "../controllers/user.controller.js"
 import { verifyJwt } from "../middlewares/auth.middleware.js"
 import { upload } from "../middlewares/multer.middleware.js"
 
 const router = Router()
 
+router.route("/razorpay-key").get(getRazorpayKey)
 router.route("/register").post(upload.single("avatar"), registerUser)
 router.route("/login").post(login)
 router.route("/forgot-password").post(forgotPassword)

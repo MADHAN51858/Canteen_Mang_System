@@ -19,6 +19,7 @@ import {
   placeOrder as placeSoloOrder,
   createRazorpayOrder,
 } from "../utils/api";
+import { openRazorpay } from "../utils/razorpay";
 
 import {
   Box,
@@ -158,74 +159,6 @@ function getFallbackImage(itemname = "") {
   if (n.includes("juice") || n.includes("drink") || n.includes("tea") || n.includes("coffee")) return DEFAULT_IMAGES.juice;
   if (n.includes("pasta") || n.includes("noodle") || n.includes("soup")) return DEFAULT_IMAGES.pasta;
   return DEFAULT_IMAGES.default;
-}
-
-// Razorpay UPI Checkout Trigger
-export async function openRazorpay(param1, param2 = "UPI Order Payment") {
-  if (!window.Razorpay) {
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    document.body.appendChild(script);
-    await new Promise((resolve) => {
-      script.onload = resolve;
-    });
-  }
-
-  let orderId = "";
-  let amount = 0;
-  let name = "Canteen Food Order";
-  let description = "UPI Order Payment";
-  let prefill = {};
-  let themeColor = "#059669";
-
-  if (typeof param1 === "object" && param1 !== null) {
-    orderId = param1.orderId || "";
-    amount = Number(param1.amount || 0);
-    name = param1.name || "Canteen Food Order";
-    description = param1.description || "UPI Order Payment";
-    prefill = param1.prefill || {};
-    themeColor = param1.themeColor || "#059669";
-  } else {
-    amount = Number(param1 || 0);
-    description = param2 || "UPI Order Payment";
-  }
-
-  return new Promise((resolve, reject) => {
-    const options = {
-      key: import.meta.env.VITE_RAZORPAY_KEY_ID,
-      amount: Math.round(amount * 100), // Convert to paise
-      currency: "INR",
-      name,
-      description,
-      prefill: {
-        name: prefill.name || "",
-        email: prefill.email || "",
-        contact: prefill.contact || "",
-      },
-      handler: function (response) {
-        resolve(response);
-      },
-      theme: {
-        color: themeColor,
-      },
-      modal: {
-        ondismiss: function () {
-          reject(new Error("Payment cancelled by user"));
-        },
-      },
-    };
-
-    if (orderId) {
-      options.order_id = orderId;
-    }
-
-    const rzp = new window.Razorpay(options);
-    rzp.on("payment.failed", function (err) {
-      console.warn("Razorpay UPI payment warning:", err);
-      reject(err?.error || new Error("Payment failed on Razorpay"));
-    });
-    rzp.open();
-  });
 }
 
 // Category visual icons & emoji definitions

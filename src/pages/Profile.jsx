@@ -1,7 +1,7 @@
 import { useState, useContext, useEffect, useRef } from "react";
 import { get, post, postForm, createWalletOrder, verifyWalletPayment } from "../utils/api";
 import { CartContext } from "../context/CartContext";
-import { openRazorpay } from "./Cart";
+import { openRazorpay } from "../utils/razorpay";
 import { useSnackbar } from "../hooks/useSnackbar";
 import {
   Box,

@@ -16,7 +16,7 @@ import {
   DialogActions,
 } from "@mui/material";
 import AddIcon from "@mui/icons-material/Add";
-import { openRazorpay } from "./Cart";
+import { openRazorpay } from "../utils/razorpay";
 
 export default function Friends() {
   const { user, login } = useContext(CartContext);

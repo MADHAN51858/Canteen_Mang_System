@@ -2,6 +2,7 @@ import { useContext, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CartContext } from "../context/CartContext";
 import { placeOrder, post, createRazorpayOrder } from "../utils/api";
+import { openRazorpay } from "../utils/razorpay";
 import { useSnackbar } from "../hooks/useSnackbar";
 
 import {
@@ -35,79 +36,7 @@ import {
 import DeleteIcon from "@mui/icons-material/Delete";
 import ShoppingBagIcon from "@mui/icons-material/ShoppingBag";
 
-export async function openRazorpay(param1, param2 = "Order Payment") {
-  // Load Razorpay script if not loaded
-  if (!window.Razorpay) {
-    const script = document.createElement("script");
-    script.src = "https://checkout.razorpay.com/v1/checkout.js";
-    document.body.appendChild(script);
-    await new Promise((resolve, reject) => {
-      script.onload = resolve;
-      script.onerror = () => reject(new Error("Failed to load Razorpay SDK. Please check your internet connection."));
-    });
-  }
-
-  let orderId = "";
-  let amount = 0;
-  let name = "Canteen Management";
-  let description = "Order Payment";
-  let prefill = {};
-  let themeColor = "#F37254";
-  let keyId = "";
-
-  if (typeof param1 === "object" && param1 !== null) {
-    orderId = param1.orderId || "";
-    amount = Number(param1.amount || 0);
-    name = param1.name || "Canteen Management";
-    description = param1.description || "Order Payment";
-    prefill = param1.prefill || {};
-    themeColor = param1.themeColor || "#F37254";
-    keyId = param1.keyId || "";
-  } else {
-    amount = Number(param1 || 0);
-    description = param2 || "Order Payment";
-  }
-
-  const isWithdraw = description?.toLowerCase().includes("withdraw");
-  const rzpKey = keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_TZXnGTteZkxaVh";
-
-  return new Promise((resolve, reject) => {
-    const options = {
-      key: rzpKey,
-      amount: Math.round(amount * 100), // Convert to paise
-      currency: "INR",
-      name: name || (isWithdraw ? "Wallet Withdrawal" : "Food Ordering App"),
-      description: description || "Order Payment",
-      prefill: {
-        name: prefill.name || "",
-        email: prefill.email || "",
-        contact: prefill.contact || "",
-      },
-      handler: function (response) {
-        resolve(response);
-      },
-      theme: {
-        color: themeColor,
-      },
-      modal: {
-        ondismiss: function () {
-          reject(new Error("Payment cancelled by user"));
-        },
-      },
-    };
-
-    if (orderId) {
-      options.order_id = orderId;
-    }
-
-    const rzp = new window.Razorpay(options);
-    rzp.on("payment.failed", function (err) {
-      console.warn("Razorpay payment failed:", err);
-      reject(err?.error || new Error("Payment failed on Razorpay"));
-    });
-    rzp.open();
-  });
-}
+export { openRazorpay };
 
 export default function Cart() {
   const navigate = useNavigate();
