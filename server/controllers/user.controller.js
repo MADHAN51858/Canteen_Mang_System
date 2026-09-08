@@ -7,6 +7,8 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { createOrder } from "./order.controller.js";
 import { Order } from "../models/order.model.js";
 import { Table } from "../models/table.model.js";
+import { Payment } from "../models/payment.model.js";
+import { getRazorpayInstance, verifyPaymentSignature } from "../utils/razorpay.js";
 import { uploadOnCloudinary, deleteFromCloudinaryByUrl } from "../utils/cloudinary.js";
 import { sendPasswordResetOtpEmail } from "../utils/mail.service.js";
 import { sendPasswordResetOtpSms } from "../utils/sms.service.js";
@@ -397,7 +399,14 @@ const getAllUsers = asyncHandler(async (req, res) => {
 });
 
 const orderFood = asyncHandler(async (req, res) => {
-  const { userOrder, pre } = req.body;
+  const {
+    userOrder,
+    pre,
+    paymentMethod = "wallet",
+    razorpayOrderId,
+    razorpayPaymentId,
+    razorpaySignature,
+  } = req.body;
 
   if (!userOrder || !Array.isArray(userOrder) || userOrder.length === 0) {
     throw new ApiError(400, "Order items cannot be empty");
@@ -408,6 +417,18 @@ const orderFood = asyncHandler(async (req, res) => {
 
   if (!user) {
     throw new ApiError(404, "User not found");
+  }
+
+  // If paid via Razorpay with signature, verify payment signature
+  if (paymentMethod === "razorpay" && razorpayOrderId && razorpayPaymentId && razorpaySignature) {
+    const isValid = verifyPaymentSignature({
+      orderId: razorpayOrderId,
+      paymentId: razorpayPaymentId,
+      signature: razorpaySignature,
+    });
+    if (!isValid) {
+      console.warn("[orderFood] Razorpay signature mismatch for order:", razorpayOrderId);
+    }
   }
 
   // Aggregate requested quantities by ID or itemname
@@ -527,8 +548,15 @@ const orderFood = asyncHandler(async (req, res) => {
   user.orders.push({ orderNumber, items: allItemIds });
   await user.save();
 
+  const paymentDetails = {
+    paymentMethod,
+    razorpayOrderId: razorpayOrderId || (paymentMethod === "wallet" ? `wallet_${orderNumber}` : `ord_${orderNumber}`),
+    razorpayPaymentId: razorpayPaymentId || (paymentMethod === "wallet" ? `wallet_bal_${orderNumber}` : ""),
+    paymentStatus: paymentMethod === "razorpay" && razorpayPaymentId ? "completed" : (paymentMethod === "wallet" ? "completed" : "pending"),
+  };
+
   // Create order receipt & QR code, then return response
-  await createOrder(res, user.username, orderNumber, expandedItems, Boolean(pre));
+  await createOrder(res, user.username, orderNumber, expandedItems, Boolean(pre), paymentDetails);
 });
 
 const getUserId = asyncHandler(async (req, res) => {
@@ -1187,6 +1215,192 @@ const changePassword = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, {}, "Password changed successfully"));
 });
 
+const createRazorpayOrder = asyncHandler(async (req, res) => {
+  const { amount, receipt, notes = {} } = req.body;
+  const numAmount = Number(amount);
+
+  if (!numAmount || numAmount <= 0) {
+    throw new ApiError(400, "Valid amount is required");
+  }
+
+  const razorpay = getRazorpayInstance();
+  if (!razorpay) {
+    throw new ApiError(500, "Razorpay is not configured on server");
+  }
+
+  const user = await User.findById(req.user._id);
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  const amountInPaise = Math.round(numAmount * 100);
+  const orderReceipt = receipt || `canteen_${user._id.toString().slice(-6)}_${Date.now()}`;
+
+  const rzpOrder = await razorpay.orders.create({
+    amount: amountInPaise,
+    currency: "INR",
+    receipt: orderReceipt,
+    notes: {
+      type: "canteen_order",
+      userId: user._id.toString(),
+      username: user.username,
+      ...notes,
+    },
+  });
+
+  await Payment.create({
+    userId: user._id,
+    razorpayOrderId: rzpOrder.id,
+    amount: numAmount,
+    currency: "INR",
+    type: "canteen_order",
+    status: "created",
+    metadata: { receipt: orderReceipt, notes: rzpOrder.notes },
+  });
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        orderId: rzpOrder.id,
+        amount: rzpOrder.amount,
+        currency: rzpOrder.currency,
+        keyId: process.env.RAZORPAY_KEY_ID,
+      },
+      "Razorpay order created successfully"
+    )
+  );
+});
+
+const createWalletOrder = asyncHandler(async (req, res) => {
+  const { amount } = req.body;
+  const numAmount = Number(amount);
+
+  if (!numAmount || numAmount <= 0) {
+    throw new ApiError(400, "Valid amount is required");
+  }
+
+  const razorpay = getRazorpayInstance();
+  if (!razorpay) {
+    throw new ApiError(500, "Razorpay is not configured on server");
+  }
+
+  const user = await User.findById(req.user._id);
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  const amountInPaise = Math.round(numAmount * 100);
+  const receipt = `wallet_${user._id.toString().slice(-6)}_${Date.now()}`;
+
+  const rzpOrder = await razorpay.orders.create({
+    amount: amountInPaise,
+    currency: "INR",
+    receipt,
+    notes: {
+      type: "wallet_recharge",
+      userId: user._id.toString(),
+      username: user.username,
+      amount: String(numAmount),
+    },
+  });
+
+  await Payment.create({
+    userId: user._id,
+    razorpayOrderId: rzpOrder.id,
+    amount: numAmount,
+    currency: "INR",
+    type: "wallet_recharge",
+    status: "created",
+    metadata: { receipt },
+  });
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        orderId: rzpOrder.id,
+        amount: rzpOrder.amount,
+        currency: rzpOrder.currency,
+        keyId: process.env.RAZORPAY_KEY_ID,
+      },
+      "Wallet recharge order created successfully"
+    )
+  );
+});
+
+const verifyWalletPayment = asyncHandler(async (req, res) => {
+  const { razorpayOrderId, razorpayPaymentId, razorpaySignature, amount } = req.body;
+
+  if (!razorpayOrderId || !razorpayPaymentId) {
+    throw new ApiError(400, "Razorpay order ID and payment ID are required");
+  }
+
+  // Verify signature if secret configured & signature provided
+  if (razorpaySignature) {
+    const isValid = verifyPaymentSignature({
+      orderId: razorpayOrderId,
+      paymentId: razorpayPaymentId,
+      signature: razorpaySignature,
+    });
+
+    if (!isValid) {
+      throw new ApiError(400, "Invalid payment signature");
+    }
+  }
+
+  const user = await User.findById(req.user._id);
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+
+  const rechargeAmount = Number(amount) || 0;
+
+  // Find or create Payment record for idempotency
+  let payment = await Payment.findOne({ razorpayOrderId });
+  if (!payment) {
+    payment = new Payment({
+      userId: user._id,
+      razorpayOrderId,
+      razorpayPaymentId,
+      razorpaySignature,
+      amount: rechargeAmount,
+      type: "wallet_recharge",
+      status: "completed",
+      creditedToWallet: false,
+    });
+  }
+
+  // Idempotency: If webhook or previous call already credited the wallet
+  if (!payment.creditedToWallet && rechargeAmount > 0) {
+    user.walletBalance = (user.walletBalance || 0) + rechargeAmount;
+    await user.save({ validateBeforeSave: false });
+
+    payment.creditedToWallet = true;
+    payment.status = "completed";
+    payment.razorpayPaymentId = razorpayPaymentId;
+    if (razorpaySignature) payment.razorpaySignature = razorpaySignature;
+    await payment.save();
+  } else {
+    // Already credited by webhook
+    payment.status = "completed";
+    payment.razorpayPaymentId = razorpayPaymentId;
+    if (razorpaySignature) payment.razorpaySignature = razorpaySignature;
+    await payment.save();
+  }
+
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        newBalance: user.walletBalance,
+        addedAmount: rechargeAmount,
+      },
+      "Wallet payment verified and credited successfully"
+    )
+  );
+});
+
 export {
   registerUser,
   addFriends,
@@ -1210,5 +1424,8 @@ export {
   forgotPassword,
   resetPassword,
   changePassword,
+  createRazorpayOrder,
+  createWalletOrder,
+  verifyWalletPayment,
 };
 

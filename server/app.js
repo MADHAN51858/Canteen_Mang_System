@@ -24,7 +24,14 @@ app.use(cors({
   credentials: true
 }))
 
-app.use(express.json({ limit: "16kb" }))
+app.use(
+  express.json({
+    limit: "16kb",
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
 app.use(express.urlencoded({ extended: true, limit: "16kb" }))
 app.use(express.static("public"))
 app.use(cookieParser())
@@ -69,12 +76,14 @@ import foodRouter from "./routes/food.routes.js"
 import order from "./routes/order.routes.js"
 import tableRouter from "./routes/table.routes.js"
 import categoryRouter from "./routes/category.routes.js"
+import webhookRouter from "./routes/webhook.routes.js"
 
 app.use("/users", userRouter)
 app.use("/food", foodRouter)
 app.use("/order", order)
 app.use("/table", tableRouter)
 app.use("/category", categoryRouter)
+app.use("/webhook", webhookRouter)
 
 import path from "path";
 import fs from "fs";
@@ -99,6 +108,8 @@ app.use((req, res, next) => {
     req.path.startsWith("/food") ||
     req.path.startsWith("/order") ||
     req.path.startsWith("/table") ||
+    req.path.startsWith("/category") ||
+    req.path.startsWith("/webhook") ||
     req.path.startsWith("/create-order")
   ) {
     return next();

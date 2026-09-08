@@ -15,10 +15,14 @@ pnpm-debug.log*
 # OS Files
 .DS_Store
 Thumbs.db
+rzp-key.csv
+rzp-*.csv
+*.csv
 
 # Editor directories and files
 .vscode
 .idea
+
 *.suo
 *.ntvs*
 *.njsproj

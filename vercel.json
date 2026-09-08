@@ -2,7 +2,7 @@
   "version": 2,
   "rewrites": [
     {
-      "source": "/(users|food|order|table|category|create-order)(.*)",
+      "source": "/(users|food|order|table|category|create-order|webhook)(.*)",
       "destination": "/api/index.js"
     },
     {

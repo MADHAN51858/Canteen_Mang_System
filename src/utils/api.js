@@ -90,8 +90,24 @@ export async function getCategoryItems(category){
   return post('/food/getCategoryItems',{category})
 }
 
-export async function placeOrder(userOrder, pre){
-  return post('/users/orderFood',{userOrder, pre})
+export async function placeOrder(userOrder, pre, paymentDetails = {}){
+  return post('/users/orderFood', {
+    userOrder,
+    pre,
+    ...paymentDetails,
+  });
+}
+
+export async function createRazorpayOrder(amount, notes = {}) {
+  return post('/users/create-razorpay-order', { amount, notes });
+}
+
+export async function createWalletOrder(amount) {
+  return post('/users/create-wallet-order', { amount });
+}
+
+export async function verifyWalletPayment(paymentData) {
+  return post('/users/verify-wallet-payment', paymentData);
 }
 
 export { post, get }

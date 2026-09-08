@@ -17,6 +17,7 @@ import {
   placeTableOrder,
   updateTableOrderType,
   placeOrder as placeSoloOrder,
+  createRazorpayOrder,
 } from "../utils/api";
 
 import {
@@ -160,7 +161,7 @@ function getFallbackImage(itemname = "") {
 }
 
 // Razorpay UPI Checkout Trigger
-export async function openRazorpay(amount) {
+export async function openRazorpay(param1, param2 = "UPI Order Payment") {
   if (!window.Razorpay) {
     const script = document.createElement("script");
     script.src = "https://checkout.razorpay.com/v1/checkout.js";
@@ -170,30 +171,58 @@ export async function openRazorpay(amount) {
     });
   }
 
-  return new Promise((resolve) => {
+  let orderId = "";
+  let amount = 0;
+  let name = "Canteen Food Order";
+  let description = "UPI Order Payment";
+  let prefill = {};
+  let themeColor = "#059669";
+
+  if (typeof param1 === "object" && param1 !== null) {
+    orderId = param1.orderId || "";
+    amount = Number(param1.amount || 0);
+    name = param1.name || "Canteen Food Order";
+    description = param1.description || "UPI Order Payment";
+    prefill = param1.prefill || {};
+    themeColor = param1.themeColor || "#059669";
+  } else {
+    amount = Number(param1 || 0);
+    description = param2 || "UPI Order Payment";
+  }
+
+  return new Promise((resolve, reject) => {
     const options = {
       key: import.meta.env.VITE_RAZORPAY_KEY_ID,
       amount: Math.round(amount * 100), // Convert to paise
       currency: "INR",
-      name: "Canteen Food Order",
-      description: "UPI Order Payment",
+      name,
+      description,
+      prefill: {
+        name: prefill.name || "",
+        email: prefill.email || "",
+        contact: prefill.contact || "",
+      },
       handler: function (response) {
         resolve(response);
       },
       theme: {
-        color: "#059669",
+        color: themeColor,
       },
       modal: {
         ondismiss: function () {
-          resolve({ dismissed: true });
+          reject(new Error("Payment cancelled by user"));
         },
       },
     };
 
+    if (orderId) {
+      options.order_id = orderId;
+    }
+
     const rzp = new window.Razorpay(options);
     rzp.on("payment.failed", function (err) {
       console.warn("Razorpay UPI payment warning:", err);
-      resolve({ failed: true });
+      reject(err?.error || new Error("Payment failed on Razorpay"));
     });
     rzp.open();
   });
@@ -1104,15 +1133,54 @@ export default function Menu() {
     const walletBalance = Number(user?.walletBalance || 0);
 
     try {
-      // Handle UPI Payment: Open Razorpay popup with total amount
+      let paymentDetails = { paymentMethod };
+
+      // Handle UPI / Razorpay Payment
       if (paymentMethod === "upi") {
-        enqueueSnackbar("Opening Razorpay UPI gateway...", { variant: "info" });
-        try {
-          await openRazorpay(totalAmount);
-        } catch (e) {
-          console.warn("Razorpay notice:", e);
+        enqueueSnackbar("Initializing Razorpay UPI payment...", { variant: "info" });
+        const rzpOrderRes = await createRazorpayOrder(totalAmount, {
+          orderType: isPre ? "pre_order" : "regular_order",
+          tableId: activeTable?.tableId || null,
+        });
+
+        if (!rzpOrderRes || !rzpOrderRes.success || !rzpOrderRes.data?.orderId) {
+          enqueueSnackbar(rzpOrderRes?.message || "Failed to initialize payment gateway", { variant: "error" });
+          setOrderSubmitting(false);
+          return;
         }
-        // If the popup closes, directly proceed to place the order
+
+        const razorpayOrderId = rzpOrderRes.data.orderId;
+        const keyId = rzpOrderRes.data.keyId;
+
+        let paymentResponse;
+        try {
+          paymentResponse = await openRazorpay({
+            orderId: razorpayOrderId,
+            keyId,
+            amount: totalAmount,
+            name: "Canteen Food Order",
+            description: "UPI Order Payment",
+            prefill: {
+              name: user?.username || "",
+              email: user?.email || "",
+              contact: user?.phoneNo ? String(user.phoneNo) : "",
+            },
+          });
+        } catch (paymentErr) {
+          const isCancelled = paymentErr?.message?.toLowerCase().includes("cancel");
+          enqueueSnackbar(isCancelled ? "Payment cancelled" : (paymentErr?.description || paymentErr?.message || "Payment was not completed"), {
+            variant: isCancelled ? "info" : "error",
+          });
+          setOrderSubmitting(false);
+          return;
+        }
+
+        paymentDetails = {
+          paymentMethod: "razorpay",
+          razorpayOrderId: paymentResponse?.razorpay_order_id || razorpayOrderId,
+          razorpayPaymentId: paymentResponse?.razorpay_payment_id || "",
+          razorpaySignature: paymentResponse?.razorpay_signature || "",
+        };
       }
 
       // Handle Wallet Payment: Deduct from wallet balance
@@ -1156,12 +1224,12 @@ export default function Menu() {
           quantity: i.quantity || 1,
         }));
 
-        const res = await placeSoloOrder(formattedItems, isPre);
+        const res = await placeSoloOrder(formattedItems, isPre, paymentDetails);
         if (res && res.success !== false && res.data) {
           setPlacedOrderDetails(res.data);
           setOrderSuccessDialog(true);
           clearCart();
-          enqueueSnackbar("Order placed successfully!", { variant: "success" });
+          enqueueSnackbar("Order placed successfully! Payment verified.", { variant: "success" });
         } else {
           // If wallet was deducted, refund it!
           if (paymentMethod === "wallet") {

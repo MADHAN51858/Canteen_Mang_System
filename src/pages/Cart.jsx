@@ -1,7 +1,7 @@
 import { useContext, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { CartContext } from "../context/CartContext";
-import { placeOrder, post } from "../utils/api";
+import { placeOrder, post, createRazorpayOrder } from "../utils/api";
 import { useSnackbar } from "../hooks/useSnackbar";
 
 import {
@@ -35,47 +35,75 @@ import {
 import DeleteIcon from "@mui/icons-material/Delete";
 import ShoppingBagIcon from "@mui/icons-material/ShoppingBag";
 
-export async function openRazorpay(amount, description = "Order Payment") {
+export async function openRazorpay(param1, param2 = "Order Payment") {
   // Load Razorpay script if not loaded
   if (!window.Razorpay) {
     const script = document.createElement("script");
     script.src = "https://checkout.razorpay.com/v1/checkout.js";
     document.body.appendChild(script);
-    await new Promise((resolve) => {
+    await new Promise((resolve, reject) => {
       script.onload = resolve;
+      script.onerror = () => reject(new Error("Failed to load Razorpay SDK. Please check your internet connection."));
     });
   }
 
-  // Step 2: open Razorpay checkout popup (dummy gateway - no order_id)
+  let orderId = "";
+  let amount = 0;
+  let name = "Canteen Management";
+  let description = "Order Payment";
+  let prefill = {};
+  let themeColor = "#F37254";
+  let keyId = "";
+
+  if (typeof param1 === "object" && param1 !== null) {
+    orderId = param1.orderId || "";
+    amount = Number(param1.amount || 0);
+    name = param1.name || "Canteen Management";
+    description = param1.description || "Order Payment";
+    prefill = param1.prefill || {};
+    themeColor = param1.themeColor || "#F37254";
+    keyId = param1.keyId || "";
+  } else {
+    amount = Number(param1 || 0);
+    description = param2 || "Order Payment";
+  }
+
+  const isWithdraw = description?.toLowerCase().includes("withdraw");
+  const rzpKey = keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || "rzp_test_TZXnGTteZkxaVh";
+
   return new Promise((resolve, reject) => {
-    const isWithdraw = description?.toLowerCase().includes("withdraw");
     const options = {
-      key: import.meta.env.VITE_RAZORPAY_KEY_ID,
+      key: rzpKey,
       amount: Math.round(amount * 100), // Convert to paise
       currency: "INR",
-      name: isWithdraw ? "Wallet Withdrawal" : "Food Ordering App",
+      name: name || (isWithdraw ? "Wallet Withdrawal" : "Food Ordering App"),
       description: description || "Order Payment",
-      // NO order_id for dummy gateway
-
+      prefill: {
+        name: prefill.name || "",
+        email: prefill.email || "",
+        contact: prefill.contact || "",
+      },
       handler: function (response) {
-        console.log(response);
         resolve(response);
       },
-
       theme: {
-        color: "#F37254",
+        color: themeColor,
       },
       modal: {
         ondismiss: function () {
-          resolve(); // Allow order to proceed even if dismissed
+          reject(new Error("Payment cancelled by user"));
         },
       },
     };
 
+    if (orderId) {
+      options.order_id = orderId;
+    }
+
     const rzp = new window.Razorpay(options);
     rzp.on("payment.failed", function (err) {
       console.warn("Razorpay payment failed:", err);
-      resolve(); // Allow order to proceed even on failure
+      reject(err?.error || new Error("Payment failed on Razorpay"));
     });
     rzp.open();
   });
@@ -102,6 +130,10 @@ export default function Cart() {
     if (cart.length === 0) {
       enqueueSnackbar("Your cart is empty", { variant: "warning" });
       return;
+    }
+    // Default to wallet if enough balance, otherwise razorpay
+    if (walletBalance < total && paymentMethod === "wallet") {
+      setPaymentMethod("razorpay");
     }
     setPaymentDialogOpen(true);
   }
@@ -144,7 +176,9 @@ export default function Cart() {
         }
 
         // Place order
-        const orderRes = await placeOrder(userOrder, isPre);
+        const orderRes = await placeOrder(userOrder, isPre, {
+          paymentMethod: "wallet",
+        });
         if (!orderRes || orderRes.success === false) {
           // Refund wallet on order placement failure
           try {
@@ -163,19 +197,84 @@ export default function Cart() {
         const successMsg = `Order placed successfully! ₹${total} deducted from wallet.`;
         setMsg(successMsg);
         enqueueSnackbar(successMsg, { variant: "success" });
-      } else {
-        // Razorpay payment
-        await openRazorpay(total);
-        const orderRes = await placeOrder(userOrder, isPre);
+      } else if (paymentMethod === "cash") {
+        // ── Cash / Pay at Counter ──
+        const orderRes = await placeOrder(userOrder, isPre, {
+          paymentMethod: "cash",
+        });
+
         if (!orderRes || orderRes.success === false) {
           const errMsg = orderRes?.message || "Failed to place order";
           setMsg(errMsg);
           enqueueSnackbar(errMsg, { variant: "error" });
           return;
         }
+
         clearCart();
         setIsPre(false);
-        const successMsg = "Order placed successfully!";
+        const successMsg = "Order placed successfully! Please pay at the counter.";
+        setMsg(successMsg);
+        enqueueSnackbar(successMsg, { variant: "success" });
+      } else {
+        // ── Razorpay Online Payment ──
+        // 1. Create Razorpay order on backend
+        const rzpOrderRes = await createRazorpayOrder(total, {
+          orderType: isPre ? "pre_order" : "regular_order",
+          itemCount: userOrder.length,
+        });
+
+        if (!rzpOrderRes || !rzpOrderRes.success || !rzpOrderRes.data?.orderId) {
+          const errMsg = rzpOrderRes?.message || "Failed to initialize Razorpay payment";
+          enqueueSnackbar(errMsg, { variant: "error" });
+          setLoading(false);
+          return;
+        }
+
+        const razorpayOrderId = rzpOrderRes.data.orderId;
+        const keyId = rzpOrderRes.data.keyId;
+
+        // 2. Open Razorpay Checkout modal
+        let paymentResponse;
+        try {
+          paymentResponse = await openRazorpay({
+            orderId: razorpayOrderId,
+            keyId,
+            amount: total,
+            name: "Canteen Food Order",
+            description: `Payment for ${cart.length} item(s)`,
+            prefill: {
+              name: user?.username || "",
+              email: user?.email || "",
+              contact: user?.phoneNo ? String(user.phoneNo) : "",
+            },
+          });
+        } catch (paymentErr) {
+          const isCancelled = paymentErr?.message?.toLowerCase().includes("cancel");
+          enqueueSnackbar(isCancelled ? "Payment cancelled" : (paymentErr?.description || paymentErr?.message || "Payment was not completed"), {
+            variant: isCancelled ? "info" : "error",
+          });
+          setLoading(false);
+          return;
+        }
+
+        // 3. Finalize order with Razorpay payment details
+        const orderRes = await placeOrder(userOrder, isPre, {
+          paymentMethod: "razorpay",
+          razorpayOrderId: paymentResponse?.razorpay_order_id || razorpayOrderId,
+          razorpayPaymentId: paymentResponse?.razorpay_payment_id || "",
+          razorpaySignature: paymentResponse?.razorpay_signature || "",
+        });
+
+        if (!orderRes || orderRes.success === false) {
+          const errMsg = orderRes?.message || "Failed to place order";
+          setMsg(errMsg);
+          enqueueSnackbar(errMsg, { variant: "error" });
+          return;
+        }
+
+        clearCart();
+        setIsPre(false);
+        const successMsg = "Order placed successfully! Payment verified.";
         setMsg(successMsg);
         enqueueSnackbar(successMsg, { variant: "success" });
       }
@@ -626,6 +725,7 @@ export default function Cart() {
                   alignItems: "center",
                   justifyContent: "space-between",
                   p: 1.5,
+                  mb: 1,
                   border: "1px solid",
                   borderColor: paymentMethod === "razorpay" ? "primary.main" : "divider",
                   borderRadius: 2,
@@ -642,6 +742,33 @@ export default function Cart() {
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                       Pay with card/UPI/netbanking
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+
+              <Box
+                sx={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  p: 1.5,
+                  border: "1px solid",
+                  borderColor: paymentMethod === "cash" ? "primary.main" : "divider",
+                  borderRadius: 2,
+                  bgcolor: paymentMethod === "cash" ? "action.hover" : "transparent",
+                  cursor: "pointer",
+                }}
+                onClick={() => setPaymentMethod("cash")}
+              >
+                <Box sx={{ display: "flex", alignItems: "center" }}>
+                  <Radio value="cash" />
+                  <Box>
+                    <Typography variant="body1" fontWeight={600}>
+                      Cash / Pay at Counter
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Pay at canteen counter when picking up
                     </Typography>
                   </Box>
                 </Box>

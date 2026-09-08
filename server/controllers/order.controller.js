@@ -4,6 +4,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { Order } from "../models/order.model.js";
 import { User } from "../models/user.model.js";
 import { Food } from "../models/food.model.js";
+import { Payment } from "../models/payment.model.js";
 
 import fs from "fs";
 import os from "os";
@@ -225,7 +226,7 @@ const Qrcode = async (res, order, items) => {
   }
 };
 
-const createOrder = async (res, userDetails, orderNumber, allItems, pre) => {
+const createOrder = async (res, userDetails, orderNumber, allItems, pre, paymentDetails = {}) => {
   if (!userDetails) {
     throw new ApiError(400, "User is required");
   }
@@ -250,16 +251,20 @@ const createOrder = async (res, userDetails, orderNumber, allItems, pre) => {
 
   const total = foodItems.reduce((sum, f) => sum + (f.price || 0), 0);
 
+  const razorpayOrderId = paymentDetails.razorpayOrderId || `ord_direct_${orderNumber}`;
+  const razorpayPaymentId = paymentDetails.razorpayPaymentId || `pay_direct_${orderNumber}`;
+  const paymentStatus = paymentDetails.paymentStatus || "completed";
+
   const order = await Order.create({
     orderedBy: user.username,
     orderNumber,
     items: orderedItems,
     amount: total,
     status: "pending",
-    razorpayOrderId: "razorpay_order_id_placeholder",
-    razorpayPaymentId: "sdfgdgd",
+    razorpayOrderId,
+    razorpayPaymentId,
     totalprice: total,
-    paymentStatus: "pending",
+    paymentStatus,
     pre,
     qrcode: "",
     receiptImageUrl: "",
@@ -269,6 +274,21 @@ const createOrder = async (res, userDetails, orderNumber, allItems, pre) => {
 
   if (!order) {
     throw new ApiError(400, "Failed to create order");
+  }
+
+  // Update associated Payment record if exists
+  if (razorpayOrderId) {
+    await Payment.findOneAndUpdate(
+      { razorpayOrderId },
+      {
+        $set: {
+          status: paymentStatus === "completed" ? "completed" : "pending",
+          razorpayPaymentId: razorpayPaymentId,
+          "metadata.orderId": order._id,
+          "metadata.orderNumber": orderNumber,
+        },
+      }
+    ).catch((e) => console.warn("[Order] Payment record update skipped:", e.message));
   }
 
   await Qrcode(res, order, foodItems);

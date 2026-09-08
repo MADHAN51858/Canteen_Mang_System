@@ -1,5 +1,5 @@
 import { useState, useContext, useEffect, useRef } from "react";
-import { get, post, postForm } from "../utils/api";
+import { get, post, postForm, createWalletOrder, verifyWalletPayment } from "../utils/api";
 import { CartContext } from "../context/CartContext";
 import { openRazorpay } from "./Cart";
 import { useSnackbar } from "../hooks/useSnackbar";
@@ -298,12 +298,54 @@ export default function UserProfile() {
 
     setAddSaving(true);
     try {
-      await openRazorpay(amountNum);
-      const res = await post("/users/addMoney", { amount: amountNum });
-      const newBalance = res?.data?.newBalance;
+      // 1. Create official Razorpay order for wallet recharge
+      const orderRes = await createWalletOrder(amountNum);
+      if (!orderRes || !orderRes.success || !orderRes.data?.orderId) {
+        throw new Error(orderRes?.message || "Failed to initialize wallet recharge");
+      }
+
+      const razorpayOrderId = orderRes.data.orderId;
+      const keyId = orderRes.data.keyId;
+
+      // 2. Open Razorpay Checkout modal
+      let paymentResponse;
+      try {
+        paymentResponse = await openRazorpay({
+          orderId: razorpayOrderId,
+          keyId,
+          amount: amountNum,
+          name: "Wallet Top-up",
+          description: `Add ₹${amountNum} to Wallet`,
+          prefill: {
+            name: user?.username || "",
+            email: user?.email || "",
+            contact: user?.phoneNo ? String(user.phoneNo) : "",
+          },
+        });
+      } catch (modalErr) {
+        const isCancelled = modalErr?.message?.toLowerCase().includes("cancel");
+        if (isCancelled) {
+          enqueueSnackbar("Recharge cancelled", { variant: "info" });
+        } else {
+          enqueueSnackbar(modalErr?.description || modalErr?.message || "Payment was not completed", { variant: "error" });
+        }
+        setAddSaving(false);
+        return;
+      }
+
+      // 3. Verify payment on backend to update wallet balance immediately
+      const verifyRes = await verifyWalletPayment({
+        razorpayOrderId: paymentResponse?.razorpay_order_id || razorpayOrderId,
+        razorpayPaymentId: paymentResponse?.razorpay_payment_id || "",
+        razorpaySignature: paymentResponse?.razorpay_signature || "",
+        amount: amountNum,
+      });
+
+      const newBalance = verifyRes?.data?.newBalance;
       if (typeof newBalance === "number") {
         login({ ...user, walletBalance: newBalance });
       }
+
       setAddMoneyOpen(false);
       setAddAmount("");
       enqueueSnackbar(`₹${amountNum} added to wallet successfully!`, { variant: "success" });

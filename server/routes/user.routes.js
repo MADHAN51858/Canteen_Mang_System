@@ -22,6 +22,9 @@ import {
     forgotPassword,
     resetPassword,
     changePassword,
+    createRazorpayOrder,
+    createWalletOrder,
+    verifyWalletPayment,
 } from "../controllers/user.controller.js"
 import { verifyJwt } from "../middlewares/auth.middleware.js"
 import { upload } from "../middlewares/multer.middleware.js"
@@ -50,5 +53,8 @@ router.route("/orderFood").post(verifyJwt,orderFood)
 router.route("/cancelOrder").post(verifyJwt,cancelOrder)
 router.route("/addMoney").post(verifyJwt, addMoneyToWallet)
 router.route("/deductFromWallet").post(verifyJwt, deductFromWallet)
+router.route("/create-razorpay-order").post(verifyJwt, createRazorpayOrder)
+router.route("/create-wallet-order").post(verifyJwt, createWalletOrder)
+router.route("/verify-wallet-payment").post(verifyJwt, verifyWalletPayment)
 
 export default router;

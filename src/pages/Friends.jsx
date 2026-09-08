@@ -1,7 +1,6 @@
-
 import { useContext, useState, useEffect } from "react";
 import { CartContext } from "../context/CartContext";
-import { post } from "../utils/api";
+import { post, createWalletOrder, verifyWalletPayment } from "../utils/api";
 import { useSnackbar } from "../hooks/useSnackbar";
 import {
   Box,
@@ -65,16 +64,53 @@ export default function Friends() {
     setProcessing(true);
 
     try {
-      await openRazorpay(amountNum);
+      // 1. Create Razorpay order on backend
+      const orderRes = await createWalletOrder(amountNum);
+      if (!orderRes || !orderRes.success || !orderRes.data?.orderId) {
+        throw new Error(orderRes?.message || "Failed to initialize wallet recharge");
+      }
 
-      // Directly add money to wallet
-      const res = await post("/users/addMoney", { amount: amountNum });
+      const razorpayOrderId = orderRes.data.orderId;
+      const keyId = orderRes.data.keyId;
+
+      // 2. Open Razorpay Checkout modal
+      let paymentResponse;
+      try {
+        paymentResponse = await openRazorpay({
+          orderId: razorpayOrderId,
+          keyId,
+          amount: amountNum,
+          name: "Wallet Top-up",
+          description: `Add ₹${amountNum} to Wallet`,
+          prefill: {
+            name: user?.username || "",
+            email: user?.email || "",
+            contact: user?.phoneNo ? String(user.phoneNo) : "",
+          },
+        });
+      } catch (modalErr) {
+        const isCancelled = modalErr?.message?.toLowerCase().includes("cancel");
+        if (isCancelled) {
+          enqueueSnackbar("Recharge cancelled", { variant: "info" });
+        } else {
+          enqueueSnackbar(modalErr?.description || modalErr?.message || "Payment was not completed", { variant: "error" });
+        }
+        setProcessing(false);
+        return;
+      }
+
+      // 3. Verify payment on backend
+      const res = await verifyWalletPayment({
+        razorpayOrderId: paymentResponse?.razorpay_order_id || razorpayOrderId,
+        razorpayPaymentId: paymentResponse?.razorpay_payment_id || "",
+        razorpaySignature: paymentResponse?.razorpay_signature || "",
+        amount: amountNum,
+      });
 
       if (res && res.success) {
-        // Update balance
-        setBalance(res.data.newBalance);
-        // Update context
-        const updatedUser = { ...user, walletBalance: res.data.newBalance };
+        const newBal = res.data.newBalance;
+        setBalance(newBal);
+        const updatedUser = { ...user, walletBalance: newBal };
         login(updatedUser);
         setAmount("");
         setOpenDialog(false);
@@ -84,7 +120,7 @@ export default function Friends() {
       }
     } catch (error) {
       console.error("Add money error:", error);
-      enqueueSnackbar("Payment or top-up failed. Please try again.", { variant: "error" });
+      enqueueSnackbar(error?.message || "Payment or top-up failed. Please try again.", { variant: "error" });
     } finally {
       setProcessing(false);
     }
