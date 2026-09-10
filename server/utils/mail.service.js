@@ -38,7 +38,7 @@ export const sendPasswordResetOtpEmail = async (toEmail, otp, username = "User")
     };
   }
 
-  const frontendUrl = (process.env.CORS_ORIGIN || "http://localhost:5173").replace(/\/$/, "");
+  const frontendUrl = (process.env.FRONTEND_URL || process.env.VITE_APP_URL || process.env.CORS_ORIGIN || "http://localhost:5173").replace(/\/$/, "");
   const resetLink = `${frontendUrl}/forgot-password?email=${encodeURIComponent(toEmail)}&otp=${otp}`;
 
   const mailOptions = {

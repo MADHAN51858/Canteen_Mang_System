@@ -590,10 +590,10 @@ const cancelOrder = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Order not found");
   }
 
-  // Admins can cancel any order
-  const isAdmin = requester.role === "admin";
+  // Admins and staff can cancel any order
+  const isAdminOrStaff = requester.role === "admin" || requester.role === "staff";
 
-  if (!isAdmin) {
+  if (!isAdminOrStaff) {
     // Verify that the order belongs to this user
     if (order.orderedBy !== requester.username) {
       throw new ApiError(403, "You can only cancel your own orders");
@@ -608,7 +608,7 @@ const cancelOrder = asyncHandler(async (req, res) => {
 
     await requester.save();
   } else {
-    // Admin path: also update the owning user's records when possible
+    // Admin/Staff path: also update the owning user's records when possible
     const owner = await User.findOne({ username: order.orderedBy });
     if (owner) {
       owner.orders = owner.orders.filter((o) => o.orderNumber !== orderNumber);

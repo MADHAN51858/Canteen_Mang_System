@@ -357,8 +357,8 @@ const markPreparing = asyncHandler(async (req, res) => {
   if (!admin) {
     throw new ApiError(404, "User not found");
   }
-  if (admin.role !== "admin") {
-    throw new ApiError(403, "Only admins can accept orders");
+  if (admin.role !== "admin" && admin.role !== "staff") {
+    throw new ApiError(403, "Only admins or staff can accept orders");
   }
 
   const normalized = String(orderNumber).trim().toLowerCase();
